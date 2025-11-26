@@ -40,7 +40,6 @@ From the repository root:
 ├── Older Attempts/                      # Scratch & learning experiments
 │   └── ... (early prototypes, tests, etc.)
 └── README.md
-└── main.py
 ```
 
 ### Main simulation files
@@ -183,15 +182,7 @@ which analytically solves for the time when z = 0 and predicts the corresponding
 
 The incoming warhead is approximated as a **point mass** with gravity and a simple drag term:
 
-```math
-\mathbf{a}_{\text{threat}} =
-\begin{bmatrix}
-0 \\
-0 \\
--g
-\end{bmatrix}
-- C_d \,\|\mathbf{v}\|\, \mathbf{v}
-
+`a_threat = [0, 0, -g] - C_d * ||v|| * v`
 
 Each run spawns a new random scenario:
 
@@ -241,25 +232,25 @@ and acceleration is a = F_total / m. Mass is updated during boost to reflect fue
 
 The interceptor uses a classic **Proportional Navigation (PN)** guidance law with gravity compensation.
 
-1. Compute relative vectors:
+1- Compute relative vectors:
 
 > r = p_target - p_interceptor
 >
 > v = v_target - v_interceptor
 
-2. Line-of-sight (LOS) rotation rate:
+2- Line-of-sight (LOS) rotation rate:
 
 > omega = (r × v) / (|r|² + ε)
 
-3. PN acceleration command:
+3- PN acceleration command:
 
 > a_PN = N * (v × omega)
 
-4. Augment with gravity bias:
+4- Augment with gravity bias:
 
 > a_cmd = a_PN + [0, 0, g]
 
-5. Enforce a **G-limit**:
+5- Enforce a **G-limit**:
 
 > |a_cmd| ≤ max_g * g
 
@@ -285,14 +276,12 @@ would miss collisions because the objects may "jump over" each other between fra
 
 To fix this, the simulation uses **Closest Point of Approach (CPA)** over each time step:
 
-1. Let Δp = p2 - p1, and Δv = v2 - v1.
-2. The time of minimum separation (assuming linear motion over the step) is:
+1 Let Δp = p2 - p1, and Δv = v2 - v1.
+2- The time of minimum separation (assuming linear motion over the step) is:
 
-```math
-t_{\min} = -\,\frac{\Delta \mathbf{p} \cdot \Delta \mathbf{v}}{\lVert \Delta \mathbf{v} \rVert^2}
+> t_min = - (Δp · Δv) / |Δv|²
 
-
-3. If 0 ≤ t_min ≤ dt, the distance at that instant is checked; otherwise the distances at the start and end of the step are compared.
+3- If 0 ≤ t_min ≤ dt, the distance at that instant is checked; otherwise the distances at the start and end of the step are compared.
 
 If the minimum distance within the step is smaller than `kill_radius`, the sim:
 
@@ -364,3 +353,7 @@ Some ideas for future work:
 * Simple GUI front-end to let users configure scenarios without editing code.
 
 ---
+
+## 📜 License
+
+This project is intended for educational and research purposes. If you plan to release it publicly, a good default choice is the **MIT License**; you can add a `LICENSE` file with the standard MIT text if you’d like it to be formally open source.
