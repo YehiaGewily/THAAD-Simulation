@@ -1,6 +1,6 @@
 # THAAD-Like Ballistic Missile Defense Simulation
 
-***A Python-based study of Guidance, Navigation, and Control (GNC) for kinetic interception
+A Python-based study of Guidance, Navigation, and Control (GNC) for kinetic interception
 
 ---
 
