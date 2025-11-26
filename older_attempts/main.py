@@ -1,11 +1,11 @@
 # main.py
 import numpy as np
-from older_attempts.environment import Environment
-from older_attempts.missile_threat import BallisticMissile
-from older_attempts.missile_interceptor import Interceptor
-from older_attempts.radar import Radar
-from older_attempts.fire_control import FireControl
-from older_attempts.visualization import Visualizer
+from environment import Environment
+from missile_threat import BallisticMissile
+from missile_interceptor import Interceptor
+from radar import Radar
+from fire_control import FireControl
+from visualization import Visualizer
 
 def run_simulation():
     # 1. Setup

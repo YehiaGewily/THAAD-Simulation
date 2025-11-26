@@ -1,9 +1,9 @@
 import numpy as np
 
-# Try to force a windowed backend for interactive rotation (optional)
+# Backend selection must happen before importing pyplot
 import matplotlib
 try:
-    matplotlib.use("TkAgg")
+    matplotlib.use("TkAgg")  # try windowed backend
 except Exception:
     pass
 
@@ -21,15 +21,18 @@ console = Console()
 # 1. MATH & PHYSICS MODULES
 # ============================================================================
 class KalmanFilter:
-    """Standard 6-State Kalman Filter with simple gravity compensation."""
+    """Standard 6-State Kalman Filter with Gravity Compensation"""
     def __init__(self, dt, pos_std, vel_std):
         self.dt = dt
+        # State Transition Matrix (F)
         self.F = np.eye(6)
         for i in range(3):
             self.F[i, i+3] = dt
 
+        # Measurement Matrix (H)
         self.H = np.eye(6)
 
+        # Process Noise (Q) and Measurement Noise (R)
         self.Q = np.eye(6) * 0.1
         self.R = np.eye(6)
         for i in range(3):
@@ -47,12 +50,13 @@ class KalmanFilter:
             self.initialized = True
             return self.x[:3], self.x[3:]
 
-        # Predict
+        # Predict Step
         self.x = self.F @ self.x
-        self.x[5] -= 9.81 * self.dt          # simple gravity model on vz
+        # Simple gravity model: pull vz down each step
+        self.x[5] -= 9.81 * self.dt
         self.P = self.F @ self.P @ self.F.T + self.Q
 
-        # Update
+        # Update Step
         y = z - self.H @ self.x
         S = self.H @ self.P @ self.H.T + self.R
         K = self.P @ self.H.T @ np.linalg.inv(S)
@@ -62,65 +66,77 @@ class KalmanFilter:
         return self.x[:3], self.x[3:]
 
     def predict_impact(self, g):
-        """Predict impact point on z=0 from current state."""
+        """Predicts ground impact (z=0) based on current state."""
         if self.x[5] >= 0:
-            return None
+            return None  # moving up or level
+
         p_z, v_z = self.x[2], self.x[5]
+
+        # Solve 0.5*g*t^2 - v0*t - z0 = 0  (z(t)=0)
         a = 0.5 * g
         b = -v_z
         c = -p_z
-        d = b*b - 4*a*c
+        d = b * b - 4 * a * c
+
         if d < 0:
             return None
-        t_sol = (-b + np.sqrt(d)) / (2*a)
+
+        # Use positive root
+        t_sol = (-b + np.sqrt(d)) / (2 * a)
         if t_sol <= 0:
             return None
+
         return np.array([
-            self.x[0] + self.x[3]*t_sol,
-            self.x[1] + self.x[4]*t_sol,
+            self.x[0] + self.x[3] * t_sol,
+            self.x[1] + self.x[4] * t_sol,
             0.0
         ])
 
 
 def get_cpa(pos1, vel1, pos2, vel2, dt):
-    """Closest Point of Approach over [0, dt]."""
+    """Continuous Collision Detection (solves tunneling between frames)."""
     dp = pos2 - pos1
     dv = vel2 - vel1
     dv2 = np.dot(dv, dv)
+
     if dv2 < 1e-6:
         return 0.0, np.linalg.norm(dp)
+
     t_min = -np.dot(dp, dv) / dv2
+
     if 0 <= t_min <= dt:
         return t_min, np.linalg.norm(dp + dv * t_min)
+
+    # Otherwise compare start/end
     d_start = np.linalg.norm(dp)
-    d_end   = np.linalg.norm(dp + dv * dt)
+    d_end = np.linalg.norm(dp + dv * dt)
     if d_start < d_end:
         return 0.0, d_start
     else:
         return dt, d_end
 
 # ============================================================================
-# 2. CONFIGURATION – tuned for “reasonable” interceptor, not god mode
+# 2. CONFIGURATION (MAX-PERFORMANCE INTERCEPTOR, NOT CRAZY)
 # ============================================================================
 class SimConfig:
     dt = 0.02
-    t_max = 150.0
+    t_max = 150.0  # base; we’ll also expand dynamically
     g = 9.81
 
     pos_noise = 25.0
     vel_noise = 8.0
 
-    # More moderate interceptor numbers
-    boost_thrust = 180000.0   # N
-    boost_time   = 6.0        # s
-    mass_wet     = 900.0      # kg
-    mass_dry     = 450.0      # kg
-    kv_mass      = 200.0      # kg
+    # MAX-PERFORMANCE INTERCEPTOR SPECS (strong but reasonable)
+    boost_thrust = 180000.0  # N
+    boost_time   = 6.0       # s
+    mass_wet     = 900.0
+    mass_dry     = 450.0
+    kv_mass      = 200.0
     kv_drag      = 0.00008
 
-    pn_gain      = 4.0
-    max_g        = 40.0       # 40 g lateral limit
-    kill_radius  = 25.0       # 25 m hit bubble
+    pn_gain      = 4.0       # PN gain
+    max_g        = 40.0      # 40G turn capability
+    kill_radius  = 25.0      # 25 m kill volume
 
 # ============================================================================
 # 3. OBJECTS
@@ -135,6 +151,8 @@ class BallisticThreat:
         if self.pos[2] <= 0:
             self.active = False
             return
+
+        # Physics with drag
         speed = np.linalg.norm(self.vel)
         drag = -0.00004 * speed * self.vel
         self.vel += (np.array([0, 0, -SimConfig.g]) + drag) * dt
@@ -157,13 +175,13 @@ class AdvancedInterceptor:
         self.launched = True
         self.launch_time = t
         self.stage = "BOOST"
-        self.vel = direction * 80.0  # tube-exit kick
+        self.vel = direction * 80.0  # Initial kick (slightly lower)
 
     def update(self, t, target_p, target_v, dt):
         if not self.launched or self.exploded:
             return
 
-        # Staging
+        # Stage management
         t_flight = t - self.launch_time
         if t_flight < SimConfig.boost_time:
             self.stage = "BOOST"
@@ -175,12 +193,13 @@ class AdvancedInterceptor:
             self.mass = SimConfig.kv_mass
             thrust = 0.0
 
-        # PN guidance
+        # Guidance (Augmented PN)
         r = target_p - self.pos
         v = target_v - self.vel
         r_mag = np.linalg.norm(r)
 
         if r_mag < 20.0:
+            # Avoid singularity at very close range
             acc_cmd = np.zeros(3)
         else:
             omega = np.cross(r, v) / (r_mag**2 + 1e-6)
@@ -193,9 +212,10 @@ class AdvancedInterceptor:
         if acc_mag > lim:
             acc_cmd = acc_cmd / acc_mag * lim
             acc_mag = lim
+
         self.g_hist.append(acc_mag / 9.81)
 
-        # Force direction for thrust
+        # Force application
         if np.linalg.norm(acc_cmd) > 1e-3:
             u = acc_cmd / np.linalg.norm(acc_cmd)
         else:
@@ -208,7 +228,7 @@ class AdvancedInterceptor:
         f_maneuver = acc_cmd * self.mass
 
         if self.stage == "BOOST":
-            total_f = f_thrust + f_grav + f_drag + 0.1 * f_maneuver
+            total_f = f_thrust + f_grav + f_drag + (f_maneuver * 0.1)
         else:
             total_f = f_maneuver + f_grav + f_drag
 
@@ -217,31 +237,35 @@ class AdvancedInterceptor:
         self.pos += self.vel * dt
 
 # ============================================================================
-# 4. SCENARIO GENERATION – easier geometry, mild drag compensation
+# 4. SCENARIO GENERATION (slightly easier geometry, mild drag comp)
 # ============================================================================
 def spawn_threat():
+    """Spawns a threat with velocity boosted slightly to compensate for drag."""
     g = SimConfig.g
 
-    # Slightly lower / closer than before so intercept is feasible
-    T_imp = np.random.uniform(80.0, 110.0)
+    # Slightly lower / closer so intercept is feasible without insane performance
+    T_imp = np.random.uniform(80.0, 110.0)        # nominal time to impact (no-drag)
     z0    = np.random.uniform(50000.0, 70000.0)   # 50–70 km
-    r0    = np.random.uniform(30000.0, 45000.0)   # 30–45 km
 
-    theta0 = np.random.uniform(0, 2*np.pi)
-    x0, y0 = r0*np.cos(theta0), r0*np.sin(theta0)
+    r0     = np.random.uniform(30000.0, 45000.0)  # 30–45 km ground range
+    theta0 = np.random.uniform(0, 2 * np.pi)
+    x0, y0 = r0 * np.cos(theta0), r0 * np.sin(theta0)
 
+    # Aim at origin (0,0)
     x_imp, y_imp = 0.0, 0.0
 
+    # Ideal vacuum velocity
     vz0 = (0.5 * g * T_imp**2 - z0) / T_imp
     vx0 = (x_imp - x0) / T_imp
     vy0 = (y_imp - y0) / T_imp
 
-    # Light drag compensation (3%)
+    # Light COMPENSATION FOR DRAG: boost the full vector by ~3%
     drag_comp = 1.03
     vel0 = np.array([vx0, vy0, vz0]) * drag_comp
 
     console.print(
-        f"[dim]Scenario: {z0/1000:.1f} km alt, {r0/1000:.1f} km range, T_imp≈{T_imp:.1f} s[/dim]"
+        f"[dim]Scenario: {z0/1000:.1f} km Alt, {r0/1000:.1f} km Range, "
+        f"T_imp≈{T_imp:.1f} s, Drag Comp: {drag_comp:.2f}x[/dim]"
     )
 
     return BallisticThreat([x0, y0, z0], vel0), T_imp
@@ -254,39 +278,52 @@ def run():
     interceptor = AdvancedInterceptor([0, 0, 0])
     kf = KalmanFilter(SimConfig.dt, SimConfig.pos_noise, SimConfig.vel_noise)
 
+    # Dynamic sim window: enough time for drag and engagement
     t_max = max(SimConfig.t_max, nom_T * 2.0 + 30.0)
 
     t = 0.0
-    hist = {'t':[], 't_pos':[], 'i_pos':[], 'k_pos':[], 'status':[], 'stage':[], 'raw':[]}
-    outcome = "UNKNOWN"
-    kill_info = {}
+    hist = {
+        't': [], 't_pos': [], 'i_pos': [],
+        'k_pos': [], 'status': [], 'stage': [], 'raw': []
+    }
 
-    console.print("\n" + "="*60, style="bold blue")
-    console.print("[bold green]THAAD v5.1 | INTERCEPT SIM (TUNED)[/bold green]")
+    outcome    = "UNKNOWN"
+    kill_info  = {}
+
+    console.print("\n" + "=" * 60, style="bold blue")
+    console.print("[bold green]THAAD v5.0 | MAX-PERFORMANCE INTERCEPT DEMO[/bold green]")
     console.print(f"[dim]Dynamic simulation window: 0–{t_max:.1f} s[/dim]")
-    console.print("="*60, style="bold blue")
+    console.print("=" * 60, style="bold blue")
 
     while t < t_max:
-        # Sensor model
+        # 1. Sense & Track
         mp = threat.pos + np.random.normal(0, SimConfig.pos_noise, 3)
         mv = threat.vel + np.random.normal(0, SimConfig.vel_noise, 3)
         ep, ev = kf.update(mp, mv)
 
-        # Launch when track is stable & descending
+        # 2. Launch Logic:
+        #    If target is descending (ev[2]<0), and we have some tracking, then fire.
         if (t > 3.0) and (not interceptor.launched) and (ev[2] < 0):
             direction = ep - interceptor.pos
             direction = direction / np.linalg.norm(direction)
             interceptor.launch(t, direction)
-            console.print(f"[bold yellow][T+{t:05.2f}] LAUNCH:[/bold yellow] Track confirmed.")
+            console.print(
+                f"[bold yellow][T+{t:05.2f}] LAUNCH:[/bold yellow] Track confirmed. WEAPONS FREE."
+            )
 
-        # Interceptor physics + kill check
+        # 3. Interceptor Physics & Kill Check
         if interceptor.launched and not interceptor.exploded:
             interceptor.update(t, ep, ev, SimConfig.dt)
-            t_off, d_min = get_cpa(interceptor.pos, interceptor.vel,
-                                   threat.pos,      threat.vel,
-                                   SimConfig.dt)
+
+            # Kill Check via CPA
+            t_off, d_min = get_cpa(
+                interceptor.pos, interceptor.vel,
+                threat.pos,      threat.vel,
+                SimConfig.dt
+            )
             if d_min < SimConfig.kill_radius:
                 interceptor.exploded = True
+
                 k_time  = t + t_off
                 k_pos_t = threat.pos + threat.vel * t_off
                 k_pos_i = interceptor.pos + interceptor.vel * t_off
@@ -302,27 +339,28 @@ def run():
 
                 outcome = "KILL"
                 kill_info = {
-                    'time': k_time,
-                    'alt':  k_pos_t[2],
                     'dist': d_min,
+                    'alt': k_pos_t[2],
+                    'time': k_time,
                     'closing': closing
                 }
+
                 console.print(
                     f"[bold green][T+{k_time:05.2f}] *** TARGET DESTROYED ***[/bold green] "
-                    f"Miss {d_min:.2f} m, Closing {closing:.1f} m/s"
+                    f"Miss distance: {d_min:.2f} m, Closing ≈ {closing:.1f} m/s"
                 )
                 break
 
-        # Threat physics
+        # 4. Threat Physics
         threat.update(SimConfig.dt)
         if not threat.active:
             outcome = "GROUND"
             console.print(
-                f"[bold red][T+{t:05.2f}] THREAT HIT GROUND BEFORE INTERCEPT.[/bold red]"
+                f"[bold red][T+{t:05.2f}] FAILED.[/bold red] Target hit ground (z=0) before intercept."
             )
             break
 
-        # Log
+        # Log state
         hist['t'].append(t)
         hist['t_pos'].append(threat.pos.copy())
         hist['i_pos'].append(interceptor.pos.copy())
@@ -333,24 +371,32 @@ def run():
 
         t += SimConfig.dt
 
+    # If neither kill nor ground, classify as TIMEOUT
     if outcome == "UNKNOWN":
         outcome = "TIMEOUT"
         console.print(
-            f"[bold red][T+{t:05.2f}] SIM TIMEOUT – target still airborne.[/bold red]"
+            f"[bold red][T+{t:05.2f}] SIM TIMEOUT – No intercept, target still airborne.[/bold red]"
+        )
+        console.print(
+            f"[dim]Final threat altitude ≈ {threat.pos[2]:.1f} m, "
+            f"range ≈ {np.linalg.norm(threat.pos[:2]):.1f} m.[/dim]"
         )
 
-    # BDA
+    # Report
     table = Table(title="BATTLE DAMAGE ASSESSMENT")
     table.add_column("Metric")
     table.add_column("Value")
     table.add_row("Outcome", outcome)
+
     if outcome == "KILL":
         table.add_row("Kill Time", f"{kill_info['time']:.2f} s")
-        table.add_row("Kill Altitude", f"{kill_info['alt']/1000:.1f} km")
+        table.add_row("Kill Altitude", f"{kill_info['alt'] / 1000:.1f} km")
         table.add_row("Miss Distance", f"{kill_info['dist']:.2f} m")
         table.add_row("Closing Velocity", f"{kill_info['closing']:.1f} m/s")
+
     if interceptor.g_hist:
         table.add_row("Max G-Load", f"{max(interceptor.g_hist):.1f} G")
+
     console.print(table)
 
     return hist
@@ -365,23 +411,26 @@ if __name__ == "__main__":
     i_pos = np.array(h['i_pos'])
     k_pos = np.array(h['k_pos'])
 
+    # Subsampling for smooth playback
     PLAYBACK_SPEED = 5
     frame_indices = np.arange(0, len(h['t']), PLAYBACK_SPEED, dtype=int)
-    if frame_indices[-1] != len(h['t'])-1:
-        frame_indices = np.append(frame_indices, len(h['t'])-1)
+    if frame_indices[-1] != len(h['t']) - 1:
+        frame_indices = np.append(frame_indices, len(h['t']) - 1)
 
     fig = plt.figure(figsize=(14, 10))
     ax = fig.add_subplot(111, projection='3d')
     ax.mouse_init()
 
-    # Defended zone (visual)
-    theta = np.linspace(0, 2*np.pi, 100)
-    ax.plot(30000*np.cos(theta), 30000*np.sin(theta), 0, 'lime', label='Defended Area')
+    # Ground Zone (visual only)
+    theta = np.linspace(0, 2 * np.pi, 100)
+    ax.plot(30000 * np.cos(theta), 30000 * np.sin(theta), 0, 'lime', label='Defended Area')
 
+    # Trajectories
     lt, = ax.plot([], [], [], 'r--', label='Threat')
     li, = ax.plot([], [], [], 'cyan', linewidth=2, label='Interceptor')
     lk, = ax.plot([], [], [], 'g-', alpha=0.5, label='Kalman Track')
 
+    # Markers
     pt, = ax.plot([], [], [], 'ro')
     pi, = ax.plot([], [], [], 'b^')
     expl, = ax.plot([], [], [], 'y*', markersize=50, visible=False)
@@ -400,20 +449,20 @@ if __name__ == "__main__":
         if idx < 0 or idx >= len(h['t']):
             return
 
-        lt.set_data(t_pos[:idx,0], t_pos[:idx,1])
-        lt.set_3d_properties(t_pos[:idx,2])
+        lt.set_data(t_pos[:idx, 0], t_pos[:idx, 1])
+        lt.set_3d_properties(t_pos[:idx, 2])
 
-        li.set_data(i_pos[:idx,0], i_pos[:idx,1])
-        li.set_3d_properties(i_pos[:idx,2])
+        li.set_data(i_pos[:idx, 0], i_pos[:idx, 1])
+        li.set_3d_properties(i_pos[:idx, 2])
 
-        lk.set_data(k_pos[:idx,0], k_pos[:idx,1])
-        lk.set_3d_properties(k_pos[:idx,2])
+        lk.set_data(k_pos[:idx, 0], k_pos[:idx, 1])
+        lk.set_3d_properties(k_pos[:idx, 2])
 
-        pt.set_data([t_pos[idx,0]],[t_pos[idx,1]])
-        pt.set_3d_properties([t_pos[idx,2]])
+        pt.set_data([t_pos[idx, 0]], [t_pos[idx, 1]])
+        pt.set_3d_properties([t_pos[idx, 2]])
 
-        pi.set_data([i_pos[idx,0]],[i_pos[idx,1]])
-        pi.set_3d_properties([i_pos[idx,2]])
+        pi.set_data([i_pos[idx, 0]], [i_pos[idx, 1]])
+        pi.set_3d_properties([i_pos[idx, 2]])
 
         stat = h['status'][idx]
         mode = h['stage'][idx]
@@ -421,8 +470,8 @@ if __name__ == "__main__":
 
         if stat == "HIT":
             txt_stat.set_color("green")
-            expl.set_data([t_pos[idx,0]],[t_pos[idx,1]])
-            expl.set_3d_properties([t_pos[idx,2]])
+            expl.set_data([t_pos[idx, 0]], [t_pos[idx, 1]])
+            expl.set_3d_properties([t_pos[idx, 2]])
             expl.set_visible(True)
             pt.set_visible(False)
             pi.set_visible(False)
@@ -442,19 +491,17 @@ if __name__ == "__main__":
         interval=20, blit=False, repeat=False
     )
 
-    # Slider to scrub time
+    # Time Slider
     ax_sl = plt.axes([0.2, 0.02, 0.6, 0.03])
-    sl = Slider(ax_sl, "Time Frame", 0, len(frame_indices)-1, valinit=0, valfmt="%0.0f")
+    sl = Slider(ax_sl, "Time Frame", 0, len(frame_indices) - 1, valinit=0, valfmt="%0.0f")
 
     def on_change(val):
         f = int(sl.val)
-        f = max(0, min(f, len(frame_indices)-1))
+        f = max(0, min(f, len(frame_indices) - 1))
         idx = frame_indices[f]
         draw_frame(idx)
         fig.canvas.draw_idle()
 
     sl.on_changed(on_change)
-   
 
-   
     plt.show()

@@ -1,6 +1,6 @@
 # missile_interceptor.py
 import numpy as np
-from older_attempts.guidance import Guidance
+from guidance import Guidance
 
 class Interceptor:
     def __init__(self, start_pos):
