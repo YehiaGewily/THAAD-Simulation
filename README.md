@@ -4,7 +4,7 @@ A Python-based study of Guidance, Navigation, and Control (GNC) for kinetic inte
 
 ---
 
-## 📖 Overview
+## Overview
 
 This project is a 3D kinematic simulation of a **THAAD-style terminal missile defense system**, built in Python using NumPy, Matplotlib, and Rich.
 
@@ -29,7 +29,7 @@ All of this is visualized in an interactive **3D Matplotlib plot** with a **time
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 From the repository root:
 
@@ -85,7 +85,7 @@ They are kept for historical context and quick reference, but the main work now 
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Install requirements
 
@@ -119,7 +119,7 @@ In the terminal you’ll see Rich logs with launch events, kill / fail messages,
 
 ---
 
-## 🧠 How the Simulation Works
+## How the Simulation Works
 
 ### Coordinate System & Units
 
@@ -317,7 +317,7 @@ The BDA values and the 3D replay complement each other: you get both **numbers**
 
 ---
 
-## 🎮 Modes Summary
+## Modes Summary
 
 | Mode / File                          | Style            | Intercept Guarantee | Notes                                                                                   |
 | ------------------------------------ | ---------------- | ------------------- | --------------------------------------------------------------------------------------- |
@@ -342,7 +342,7 @@ Treat this repository as a **sandbox to build intuition** about missile defense 
 
 ---
 
-## 🔮 Possible Extensions
+## Possible Extensions
 
 Some ideas for future work:
 
@@ -354,6 +354,6 @@ Some ideas for future work:
 
 ---
 
-## 📜 License
+## License
 
 This project is intended for educational and research purposes. If you plan to release it publicly, a good default choice is the **MIT License**; you can add a `LICENSE` file with the standard MIT text if you’d like it to be formally open source.
