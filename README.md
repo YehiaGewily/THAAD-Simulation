@@ -353,7 +353,3 @@ Some ideas for future work:
 * Simple GUI front-end to let users configure scenarios without editing code.
 
 ---
-
-## License
-
-This project is intended for educational and research purposes. If you plan to release it publicly, a good default choice is the **MIT License**; you can add a `LICENSE` file with the standard MIT text if you’d like it to be formally open source.

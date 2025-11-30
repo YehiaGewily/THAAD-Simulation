@@ -491,9 +491,18 @@ if __name__ == "__main__":
         interval=20, blit=False, repeat=False
     )
 
-    # Time Slider
+    # --- OPTIONAL: save to MP4 (needs ffmpeg installed) ---
+    from matplotlib.animation import FFMpegWriter
+
+    writer = FFMpegWriter(
+        fps=30,                          # video framerate
+        metadata={'title': 'THAAD Sim'}, # optional
+        bitrate=2400
+    )
+        # Time Slider
     ax_sl = plt.axes([0.2, 0.02, 0.6, 0.03])
-    sl = Slider(ax_sl, "Time Frame", 0, len(frame_indices) - 1, valinit=0, valfmt="%0.0f")
+    sl = Slider(ax_sl, "Time Frame", 0, len(frame_indices) - 1,
+                valinit=0, valfmt="%0.0f")
 
     def on_change(val):
         f = int(sl.val)
@@ -503,5 +512,8 @@ if __name__ == "__main__":
         fig.canvas.draw_idle()
 
     sl.on_changed(on_change)
-
     plt.show()
+
+
+    
+

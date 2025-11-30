@@ -319,6 +319,28 @@ if __name__ == "__main__":
         
         return l_threat, l_inter, head_t, head_i, ghost, expl, txt_stat, txt_info
 
-    anim = FuncAnimation(fig, update, frames=len(t_data)+10, interval=20, blit=False, repeat=False)
+    anim = FuncAnimation(
+        fig,
+        update,
+        frames=len(t_data) + 10,
+        interval=20,
+        blit=False,
+        repeat=False
+    )
     plt.legend(loc='upper right')
+
+    # -------- SAVE ANIMATION TO VIDEO --------
+    # Make sure ffmpeg is installed and on PATH
+    # (conda: `conda install -c conda-forge ffmpeg`)
+    from matplotlib.animation import FFMpegWriter
+
+    writer = FFMpegWriter(
+        fps=30,                          # video framerate
+        metadata={'title': 'THAAD Sim'}, # optional
+        bitrate=2400                     # tweak if file too big/small
+    )
+
+    anim.save("thaad_engagement.mp4", writer=writer)
+    # -----------------------------------------
+
     plt.show()
