@@ -186,8 +186,8 @@ The incoming warhead is approximated as a **point mass** with gravity and a simp
 
 Each run spawns a new random scenario:
 
-* Initial altitude z0 in the tens of kilometers (e.g. 50–70 km).
-* Initial ground range r0 tens of kilometers away from the origin.
+* Initial altitude z0 in the tens of kilometres (e.g. 50–70 km).
+* Initial ground range r0 tens of kilometres away from the origin.
 * Random azimuth angle so the threat can arrive from any direction.
 
 To ensure it actually aims near the defended origin, the code:
@@ -281,7 +281,7 @@ To fix this, the simulation uses **Closest Point of Approach (CPA)** over each t
 
 > t_min = - (Δp · Δv) / |Δv|²
 
-3- If 0 ≤ t_min ≤ dt, the distance at that instant is checked; otherwise the distances at the start and end of the step are compared.
+3- If 0 ≤ t_min ≤ dt, the distance at that instant is checked; otherwise, the distances at the start and end of the step are compared.
 
 If the minimum distance within the step is smaller than `kill_radius`, the sim:
 
@@ -293,7 +293,7 @@ If the minimum distance within the step is smaller than `kill_radius`, the sim:
 
 ### Battle Damage Assessment (BDA)
 
-At the end of each run, the terminal prints a **Rich** table summarizing the engagement, for example:
+At the end of each run, the terminal prints a **Rich** table summarising the engagement, for example:
 
 ```text
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -313,7 +313,7 @@ Possible outcomes:
 * `GROUND` – threat impacts the ground (z = 0) before intercept.
 * `TIMEOUT` – simulation time ends while the threat is still airborne and not yet killed.
 
-The BDA values and the 3D replay complement each other: you get both **numbers** and **geometry**.
+The BDA values and the 3D replay complement each other, providing both **numbers** and **geometry**.
 
 ---
 
@@ -321,10 +321,10 @@ The BDA values and the 3D replay complement each other: you get both **numbers**
 
 | Mode / File                          | Style            | Intercept Guarantee | Notes                                                                                   |
 | ------------------------------------ | ---------------- | ------------------- | --------------------------------------------------------------------------------------- |
-| `THAAD Ultimlate Prototype.py`       | Engineering Mode | Not guaranteed      | Realistic-ish thrust, drag, G-limits, and launch logic based on predicted impact point. |
+| `THAAD Ultimate Prototype.py`       | Engineering Mode | Not guaranteed      | Realistic-ish thrust, drag, G-limits, and launch logic based on predicted impact point. |
 | `THAAD MAX_performance prototype.py` | Max-Performance  | Very high           | Strong interceptor, slightly easier threat, good for demos and intuition.               |
 
-Both modes share the same core ideas: Kalman tracking, APN guidance, continuous collision detection, and 3D visualization.
+Both modes share the same core ideas: Kalman tracking, APN guidance, continuous collision detection, and 3D visualisation.
 
 ---
 
@@ -336,9 +336,9 @@ This is a **learning tool**, not a design or validation environment. Major simpl
 * **Earth Model** – flat Earth with constant gravity; no curvature, rotation, or Coriolis effects.
 * **Sensors** – radar is treated as a perfect 3D position/velocity sensor with Gaussian noise; real systems work in range/angle space, with clutter, dropouts, and fusion from multiple sensors.
 * **Guidance** – classic PN with a simple gravity bias; real guidance laws include many more constraints and details.
-* **No classification** – all parameters are chosen for nice behavior and readability, not based on any sensitive or proprietary data.
+* **No classification** – all parameters are chosen for nice behaviour and readability, not based on any sensitive or proprietary data.
 
-Treat this repository as a **sandbox to build intuition** about missile defense kinematics, not a predictive model for any real system.
+Treat this repository as a **sandbox for building intuition** about missile defence kinematics, not a predictive model for any real system.
 
 ---
 
@@ -349,7 +349,8 @@ Some ideas for future work:
 * Multiple simultaneous threats and interceptors.
 * Different guidance laws (pure pursuit, augmented PN variants, impact-angle constraints).
 * More realistic radar models (range/azimuth/elevation, update rate, clutter, missed detections).
-* Batch Monte Carlo runs to gather statistics on probability of kill vs. configuration.
+* Batch Monte Carlo runs to gather statistics on the probability of kill vs. configuration.
 * Simple GUI front-end to let users configure scenarios without editing code.
+
 
 ---
