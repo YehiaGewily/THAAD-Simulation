@@ -38,7 +38,7 @@ From the repository root:
 ├── THAAD MAX_performance prototype.py   # v5.0 – "Max-Performance" / High-Margin Mode
 ├── THAAD Ultimlate Prototype.py         # v5.1 – "Engineering Mode" / Tuned Realism
 ├── Older Attempts/                      # Scratch & learning experiments
-│   └── ... (early prototypes, tests, etc.)
+│   └── ... (early prototypes, tests, etc.) 
 └── README.md
 ```
 
@@ -354,3 +354,4 @@ Some ideas for future work:
 
 
 ---
+
