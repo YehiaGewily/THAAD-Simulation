@@ -138,7 +138,7 @@ Earth curvature, rotation, and detailed atmosphere models are ignored, which is 
 
 ### Radar Model & Kalman Filtering
 
-The radar is modeled as a noisy 3D sensor:
+The radar is modeled as a noisy 3D sensor: 
 
 * True position: **p = (x, y, z)**
 * True velocity: **v = (vx, vy, vz)**
@@ -354,4 +354,5 @@ Some ideas for future work:
 
 
 ---
+
 
