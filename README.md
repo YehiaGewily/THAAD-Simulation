@@ -48,27 +48,27 @@ From the repository root:
 
 This is the **primary** simulation to run.
 
-* Uses randomized threat geometry (altitude, range, azimuth) aimed near the defended origin.
-* Simulates a two-stage interceptor with realistic-ish thrust and G-limits.
+* Uses randomized threat geometry (55–75 km altitude, 35–55 km range, any azimuth) with the aim point scattered up to 35 km from the defended origin.
+* Simulates a two-stage interceptor with moderate thrust (150 kN for 5 s), a 30 G limit, and a kill vehicle with a finite **divert Δv budget** (435 m/s).
 * Applies a 6-state Kalman Filter with gravity bias to track the threat.
 * Computes a **Predicted Impact Point (PIP)** and launches only when:
 
   * The threat is clearly descending.
-  * The track has been observed long enough to be stable.
-  * The PIP lies within a plausible defended area.
-* Uses continuous collision detection and a relatively tight kill radius.
+  * The track has been observed long enough to be stable (`min_track_time`, 5 s).
+  * The PIP lies inside the defended area (`defended_radius`, 30 km). Threats predicted to land outside it are not engaged (`NO ENGAGE`).
+* Uses continuous collision detection and a tight 10 m kill radius.
 
-Result: **interception is likely but not guaranteed.** Some random scenarios will be outside the interceptor's kinematic envelope, which is exactly the point of an engineering-style sim.
+Result: **interception is likely but not guaranteed.** Over 300 seeded runs, about 64% of engaged threats are killed; the rest exhaust the kill vehicle's divert fuel and miss, and about 4% are held fire because they land outside the defended area.
 
 #### `THAAD MAX_performance prototype.py` – Max-Performance Intercept Demo
 
 This mode shares the same architecture (Kalman, PN guidance, CPA, 3D replay), but with more aggressive tuning:
 
-* Slightly easier threat profiles (closer / lower, with mild drag compensation).
-* Stronger interceptor (higher thrust, longer burn, higher G-limit, larger kill radius).
-* Launches as soon as the track is confirmed and the threat is descending.
+* Easier threat profiles (40–60 km altitude, 25–40 km range, always aimed at the origin, with mild drag compensation).
+* Stronger interceptor (220 kN for 8 s, 50 G limit, 30 m kill radius, unlimited divert fuel).
+* Launches as soon as the track is confirmed (3 s) and the threat is descending, without a PIP check.
 
-Result: **high probability of intercept**, visually satisfying trajectories, and big closing velocities. Use this mode for demonstrations or when you want a near-guaranteed hit to study the geometry.
+Result: **high probability of intercept** (300/300 seeded runs), visually satisfying trajectories, and big closing velocities. Use this mode for demonstrations or when you want a near-guaranteed hit to study the geometry.
 
 ### Older Attempts / Scratch Files
 
@@ -276,7 +276,7 @@ would miss collisions because the objects may "jump over" each other between fra
 
 To fix this, the simulation uses **Closest Point of Approach (CPA)** over each time step:
 
-1 Let Δp = p2 - p1, and Δv = v2 - v1.
+1- Both bodies are first propagated over the same step, from t to t + dt. Using their positions at t, let Δp = p2 - p1, and Δv = v2 - v1, where each v is that body's displacement over the step divided by dt.
 2- The time of minimum separation (assuming linear motion over the step) is:
 
 > t_min = - (Δp · Δv) / |Δv|²
@@ -311,6 +311,7 @@ Possible outcomes:
 
 * `KILL` – interceptor successfully hits the threat within the kill radius.
 * `GROUND` – threat impacts the ground (z = 0) before intercept.
+* `NO ENGAGE` – (Engineering Mode only) the PIP was never inside the defended area, so no interceptor was launched and the threat landed outside it.
 * `TIMEOUT` – simulation time ends while the threat is still airborne and not yet killed.
 
 The BDA values and the 3D replay complement each other, providing both **numbers** and **geometry**.
@@ -321,8 +322,8 @@ The BDA values and the 3D replay complement each other, providing both **numbers
 
 | Mode / File                          | Style            | Intercept Guarantee | Notes                                                                                   |
 | ------------------------------------ | ---------------- | ------------------- | --------------------------------------------------------------------------------------- |
-| `THAAD Ultimate Prototype.py`       | Engineering Mode | Not guaranteed      | Realistic-ish thrust, drag, G-limits, and launch logic based on predicted impact point. |
-| `THAAD MAX_performance prototype.py` | Max-Performance  | Very high           | Strong interceptor, slightly easier threat, good for demos and intuition.               |
+| `THAAD Ultimlate Prototype.py`       | Engineering Mode | ~64% of engaged     | Moderate thrust, 30 G, finite divert Δv, 10 m kill radius, PIP-gated launch.           |
+| `THAAD MAX_performance prototype.py` | Max-Performance  | ~100%               | Strong interceptor, easier threat, launches on track confirmation; good for demos.     |
 
 Both modes share the same core ideas: Kalman tracking, APN guidance, continuous collision detection, and 3D visualisation.
 

@@ -111,16 +111,21 @@ class SimConfig:
     vel_noise = 8.0
 
     # More moderate interceptor numbers
-    boost_thrust = 180000.0   # N
-    boost_time   = 6.0        # s
+    boost_thrust = 150000.0   # N
+    boost_time   = 5.0        # s
     mass_wet     = 900.0      # kg
     mass_dry     = 450.0      # kg
     kv_mass      = 200.0      # kg
     kv_drag      = 0.00008
 
     pn_gain      = 4.0
-    max_g        = 40.0       # 40 g lateral limit
-    kill_radius  = 25.0       # 25 m hit bubble
+    max_g        = 30.0       # 30 g lateral limit
+    kill_radius  = 10.0       # 10 m hit bubble
+    kv_divert_dv = 435.0      # m/s total divert delta-v for the kill vehicle
+
+    # Engagement rules
+    defended_radius = 30000.0  # m – engage only if the PIP falls inside this circle
+    min_track_time  = 5.0      # s of tracking before a launch is allowed
 
 # ============================================================================
 # 3. OBJECTS
@@ -132,13 +137,14 @@ class BallisticThreat:
         self.active = True
 
     def update(self, dt):
-        if self.pos[2] <= 0:
-            self.active = False
+        if not self.active:
             return
         speed = np.linalg.norm(self.vel)
         drag = -0.00004 * speed * self.vel
         self.vel += (np.array([0, 0, -SimConfig.g]) + drag) * dt
         self.pos += self.vel * dt
+        if self.pos[2] <= 0:
+            self.active = False
 
 
 class AdvancedInterceptor:
@@ -151,6 +157,7 @@ class AdvancedInterceptor:
         self.launch_time = 0.0
         self.launched = False
         self.exploded = False
+        self.divert_dv_used = 0.0
         self.g_hist = []
 
     def launch(self, t, direction):
@@ -193,6 +200,14 @@ class AdvancedInterceptor:
         if acc_mag > lim:
             acc_cmd = acc_cmd / acc_mag * lim
             acc_mag = lim
+
+        # KV divert thrusters have a finite delta-v budget; once spent, the KV coasts
+        if self.stage == "KV_COAST":
+            remaining = max(SimConfig.kv_divert_dv - self.divert_dv_used, 0.0)
+            if acc_mag * dt > remaining:
+                acc_cmd = acc_cmd / acc_mag * (remaining / dt)
+                acc_mag = remaining / dt
+            self.divert_dv_used += acc_mag * dt
         self.g_hist.append(acc_mag / 9.81)
 
         # Force direction for thrust
@@ -217,20 +232,22 @@ class AdvancedInterceptor:
         self.pos += self.vel * dt
 
 # ============================================================================
-# 4. SCENARIO GENERATION – easier geometry, mild drag compensation
+# 4. SCENARIO GENERATION – higher, faster threats with scattered aim points
 # ============================================================================
 def spawn_threat():
     g = SimConfig.g
 
-    # Slightly lower / closer than before so intercept is feasible
-    T_imp = np.random.uniform(80.0, 110.0)
-    z0    = np.random.uniform(50000.0, 70000.0)   # 50–70 km
-    r0    = np.random.uniform(30000.0, 45000.0)   # 30–45 km
+    T_imp = np.random.uniform(70.0, 100.0)
+    z0    = np.random.uniform(55000.0, 75000.0)   # 55–75 km
+    r0    = np.random.uniform(35000.0, 55000.0)   # 35–55 km
 
     theta0 = np.random.uniform(0, 2*np.pi)
     x0, y0 = r0*np.cos(theta0), r0*np.sin(theta0)
 
-    x_imp, y_imp = 0.0, 0.0
+    # Aim point scattered around the origin; some land outside the defended area
+    r_imp     = np.random.uniform(0.0, 35000.0)
+    theta_imp = np.random.uniform(0, 2*np.pi)
+    x_imp, y_imp = r_imp*np.cos(theta_imp), r_imp*np.sin(theta_imp)
 
     vz0 = (0.5 * g * T_imp**2 - z0) / T_imp
     vx0 = (x_imp - x0) / T_imp
@@ -241,7 +258,8 @@ def spawn_threat():
     vel0 = np.array([vx0, vy0, vz0]) * drag_comp
 
     console.print(
-        f"[dim]Scenario: {z0/1000:.1f} km alt, {r0/1000:.1f} km range, T_imp≈{T_imp:.1f} s[/dim]"
+        f"[dim]Scenario: {z0/1000:.1f} km alt, {r0/1000:.1f} km range, "
+        f"aim {r_imp/1000:.1f} km from origin, T_imp≈{T_imp:.1f} s[/dim]"
     )
 
     return BallisticThreat([x0, y0, z0], vel0), T_imp
@@ -260,6 +278,7 @@ def run():
     hist = {'t':[], 't_pos':[], 'i_pos':[], 'k_pos':[], 'status':[], 'stage':[], 'raw':[]}
     outcome = "UNKNOWN"
     kill_info = {}
+    launch_pip = None
 
     console.print("\n" + "="*60, style="bold blue")
     console.print("[bold green]THAAD v5.1 | INTERCEPT SIM (TUNED)[/bold green]")
@@ -272,25 +291,38 @@ def run():
         mv = threat.vel + np.random.normal(0, SimConfig.vel_noise, 3)
         ep, ev = kf.update(mp, mv)
 
-        # Launch when track is stable & descending
-        if (t > 3.0) and (not interceptor.launched) and (ev[2] < 0):
-            direction = ep - interceptor.pos
-            direction = direction / np.linalg.norm(direction)
-            interceptor.launch(t, direction)
-            console.print(f"[bold yellow][T+{t:05.2f}] LAUNCH:[/bold yellow] Track confirmed.")
+        # Launch only when the track is mature, the threat is descending,
+        # and its predicted impact point (PIP) lies inside the defended area
+        if (t >= SimConfig.min_track_time) and (not interceptor.launched) and (ev[2] < 0):
+            pip = kf.predict_impact(SimConfig.g)
+            if pip is not None and np.linalg.norm(pip[:2]) <= SimConfig.defended_radius:
+                direction = ep - interceptor.pos
+                direction = direction / np.linalg.norm(direction)
+                interceptor.launch(t, direction)
+                launch_pip = pip
+                console.print(
+                    f"[bold yellow][T+{t:05.2f}] LAUNCH:[/bold yellow] PIP "
+                    f"{np.linalg.norm(pip[:2])/1000:.1f} km from origin, inside defended area."
+                )
 
-        # Interceptor physics + kill check
+        # Propagate both bodies from t to t+dt, keeping the start states for the kill check
+        t_next = t + SimConfig.dt
+        i_p0 = interceptor.pos.copy()
+        t_p0 = threat.pos.copy()
+        interceptor.update(t, ep, ev, SimConfig.dt)
+        threat.update(SimConfig.dt)
+
+        # Kill check: CPA between both straight-line segments over the same step
         if interceptor.launched and not interceptor.exploded:
-            interceptor.update(t, ep, ev, SimConfig.dt)
-            t_off, d_min = get_cpa(interceptor.pos, interceptor.vel,
-                                   threat.pos,      threat.vel,
-                                   SimConfig.dt)
+            i_v = (interceptor.pos - i_p0) / SimConfig.dt
+            t_v = (threat.pos - t_p0) / SimConfig.dt
+            t_off, d_min = get_cpa(i_p0, i_v, t_p0, t_v, SimConfig.dt)
             if d_min < SimConfig.kill_radius:
                 interceptor.exploded = True
                 k_time  = t + t_off
-                k_pos_t = threat.pos + threat.vel * t_off
-                k_pos_i = interceptor.pos + interceptor.vel * t_off
-                closing = np.linalg.norm(interceptor.vel - threat.vel)
+                k_pos_t = t_p0 + t_v * t_off
+                k_pos_i = i_p0 + i_v * t_off
+                closing = np.linalg.norm(i_v - t_v)
 
                 hist['t'].append(k_time)
                 hist['t_pos'].append(k_pos_t)
@@ -313,17 +345,23 @@ def run():
                 )
                 break
 
-        # Threat physics
-        threat.update(SimConfig.dt)
         if not threat.active:
-            outcome = "GROUND"
-            console.print(
-                f"[bold red][T+{t:05.2f}] THREAT HIT GROUND BEFORE INTERCEPT.[/bold red]"
-            )
+            impact_range = np.linalg.norm(threat.pos[:2])
+            if not interceptor.launched and impact_range > SimConfig.defended_radius:
+                outcome = "NO ENGAGE"
+                console.print(
+                    f"[bold cyan][T+{t_next:05.2f}] HELD FIRE:[/bold cyan] threat impacted "
+                    f"{impact_range/1000:.1f} km from origin, outside the defended area."
+                )
+            else:
+                outcome = "GROUND"
+                console.print(
+                    f"[bold red][T+{t_next:05.2f}] THREAT HIT GROUND BEFORE INTERCEPT.[/bold red]"
+                )
             break
 
         # Log
-        hist['t'].append(t)
+        hist['t'].append(t_next)
         hist['t_pos'].append(threat.pos.copy())
         hist['i_pos'].append(interceptor.pos.copy())
         hist['k_pos'].append(ep.copy())
@@ -331,7 +369,7 @@ def run():
         hist['status'].append("FLYING" if interceptor.launched else "SEARCH")
         hist['stage'].append(interceptor.stage)
 
-        t += SimConfig.dt
+        t = t_next
 
     if outcome == "UNKNOWN":
         outcome = "TIMEOUT"
@@ -344,6 +382,10 @@ def run():
     table.add_column("Metric")
     table.add_column("Value")
     table.add_row("Outcome", outcome)
+    if launch_pip is not None:
+        table.add_row("PIP at Launch", f"{np.linalg.norm(launch_pip[:2])/1000:.1f} km from origin")
+    if outcome in ("GROUND", "NO ENGAGE"):
+        table.add_row("Impact Point", f"{np.linalg.norm(threat.pos[:2])/1000:.1f} km from origin")
     if outcome == "KILL":
         table.add_row("Kill Time", f"{kill_info['time']:.2f} s")
         table.add_row("Kill Altitude", f"{kill_info['alt']/1000:.1f} km")
@@ -376,7 +418,8 @@ if __name__ == "__main__":
 
     # Defended zone (visual)
     theta = np.linspace(0, 2*np.pi, 100)
-    ax.plot(30000*np.cos(theta), 30000*np.sin(theta), 0, 'lime', label='Defended Area')
+    R = SimConfig.defended_radius
+    ax.plot(R*np.cos(theta), R*np.sin(theta), 0, 'lime', label='Defended Area')
 
     lt, = ax.plot([], [], [], 'r--', label='Threat')
     li, = ax.plot([], [], [], 'cyan', linewidth=2, label='Interceptor')
@@ -400,14 +443,14 @@ if __name__ == "__main__":
         if idx < 0 or idx >= len(h['t']):
             return
 
-        lt.set_data(t_pos[:idx,0], t_pos[:idx,1])
-        lt.set_3d_properties(t_pos[:idx,2])
+        lt.set_data(t_pos[:idx+1,0], t_pos[:idx+1,1])
+        lt.set_3d_properties(t_pos[:idx+1,2])
 
-        li.set_data(i_pos[:idx,0], i_pos[:idx,1])
-        li.set_3d_properties(i_pos[:idx,2])
+        li.set_data(i_pos[:idx+1,0], i_pos[:idx+1,1])
+        li.set_3d_properties(i_pos[:idx+1,2])
 
-        lk.set_data(k_pos[:idx,0], k_pos[:idx,1])
-        lk.set_3d_properties(k_pos[:idx,2])
+        lk.set_data(k_pos[:idx+1,0], k_pos[:idx+1,1])
+        lk.set_3d_properties(k_pos[:idx+1,2])
 
         pt.set_data([t_pos[idx,0]],[t_pos[idx,1]])
         pt.set_3d_properties([t_pos[idx,2]])
@@ -428,6 +471,10 @@ if __name__ == "__main__":
             pi.set_visible(False)
         else:
             txt_stat.set_color("black")
+            # Restore markers when scrubbing back before the hit
+            expl.set_visible(False)
+            pt.set_visible(True)
+            pi.set_visible(True)
 
         return lt, li, lk, pt, pi, expl, txt_stat
 

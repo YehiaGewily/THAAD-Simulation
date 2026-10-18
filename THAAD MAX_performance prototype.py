@@ -127,16 +127,18 @@ class SimConfig:
     vel_noise = 8.0
 
     # MAX-PERFORMANCE INTERCEPTOR SPECS (strong but reasonable)
-    boost_thrust = 180000.0  # N
-    boost_time   = 6.0       # s
+    boost_thrust = 220000.0  # N
+    boost_time   = 8.0       # s
     mass_wet     = 900.0
     mass_dry     = 450.0
     kv_mass      = 200.0
     kv_drag      = 0.00008
 
     pn_gain      = 4.0       # PN gain
-    max_g        = 40.0      # 40G turn capability
-    kill_radius  = 25.0      # 25 m kill volume
+    max_g        = 50.0      # 50G turn capability
+    kill_radius  = 30.0      # 30 m kill volume
+
+    defended_radius = 30000.0  # m – visual only; this mode fires at every threat
 
 # ============================================================================
 # 3. OBJECTS
@@ -148,8 +150,7 @@ class BallisticThreat:
         self.active = True
 
     def update(self, dt):
-        if self.pos[2] <= 0:
-            self.active = False
+        if not self.active:
             return
 
         # Physics with drag
@@ -157,6 +158,8 @@ class BallisticThreat:
         drag = -0.00004 * speed * self.vel
         self.vel += (np.array([0, 0, -SimConfig.g]) + drag) * dt
         self.pos += self.vel * dt
+        if self.pos[2] <= 0:
+            self.active = False
 
 
 class AdvancedInterceptor:
@@ -245,9 +248,9 @@ def spawn_threat():
 
     # Slightly lower / closer so intercept is feasible without insane performance
     T_imp = np.random.uniform(80.0, 110.0)        # nominal time to impact (no-drag)
-    z0    = np.random.uniform(50000.0, 70000.0)   # 50–70 km
+    z0    = np.random.uniform(40000.0, 60000.0)   # 40–60 km
 
-    r0     = np.random.uniform(30000.0, 45000.0)  # 30–45 km ground range
+    r0     = np.random.uniform(25000.0, 40000.0)  # 25–40 km ground range
     theta0 = np.random.uniform(0, 2 * np.pi)
     x0, y0 = r0 * np.cos(theta0), r0 * np.sin(theta0)
 
@@ -311,23 +314,25 @@ def run():
                 f"[bold yellow][T+{t:05.2f}] LAUNCH:[/bold yellow] Track confirmed. WEAPONS FREE."
             )
 
-        # 3. Interceptor Physics & Kill Check
-        if interceptor.launched and not interceptor.exploded:
-            interceptor.update(t, ep, ev, SimConfig.dt)
+        # 3. Physics: propagate both bodies from t to t+dt, keeping start states
+        t_next = t + SimConfig.dt
+        i_p0 = interceptor.pos.copy()
+        t_p0 = threat.pos.copy()
+        interceptor.update(t, ep, ev, SimConfig.dt)
+        threat.update(SimConfig.dt)
 
-            # Kill Check via CPA
-            t_off, d_min = get_cpa(
-                interceptor.pos, interceptor.vel,
-                threat.pos,      threat.vel,
-                SimConfig.dt
-            )
+        # 4. Kill Check via CPA between both segments over the same step
+        if interceptor.launched and not interceptor.exploded:
+            i_v = (interceptor.pos - i_p0) / SimConfig.dt
+            t_v = (threat.pos - t_p0) / SimConfig.dt
+            t_off, d_min = get_cpa(i_p0, i_v, t_p0, t_v, SimConfig.dt)
             if d_min < SimConfig.kill_radius:
                 interceptor.exploded = True
 
                 k_time  = t + t_off
-                k_pos_t = threat.pos + threat.vel * t_off
-                k_pos_i = interceptor.pos + interceptor.vel * t_off
-                closing = np.linalg.norm(interceptor.vel - threat.vel)
+                k_pos_t = t_p0 + t_v * t_off
+                k_pos_i = i_p0 + i_v * t_off
+                closing = np.linalg.norm(i_v - t_v)
 
                 hist['t'].append(k_time)
                 hist['t_pos'].append(k_pos_t)
@@ -351,17 +356,16 @@ def run():
                 )
                 break
 
-        # 4. Threat Physics
-        threat.update(SimConfig.dt)
+        # 5. Ground Impact
         if not threat.active:
             outcome = "GROUND"
             console.print(
-                f"[bold red][T+{t:05.2f}] FAILED.[/bold red] Target hit ground (z=0) before intercept."
+                f"[bold red][T+{t_next:05.2f}] FAILED.[/bold red] Target hit ground (z=0) before intercept."
             )
             break
 
         # Log state
-        hist['t'].append(t)
+        hist['t'].append(t_next)
         hist['t_pos'].append(threat.pos.copy())
         hist['i_pos'].append(interceptor.pos.copy())
         hist['k_pos'].append(ep.copy())
@@ -369,7 +373,7 @@ def run():
         hist['status'].append("FLYING" if interceptor.launched else "SEARCH")
         hist['stage'].append(interceptor.stage)
 
-        t += SimConfig.dt
+        t = t_next
 
     # If neither kill nor ground, classify as TIMEOUT
     if outcome == "UNKNOWN":
@@ -423,7 +427,8 @@ if __name__ == "__main__":
 
     # Ground Zone (visual only)
     theta = np.linspace(0, 2 * np.pi, 100)
-    ax.plot(30000 * np.cos(theta), 30000 * np.sin(theta), 0, 'lime', label='Defended Area')
+    R = SimConfig.defended_radius
+    ax.plot(R * np.cos(theta), R * np.sin(theta), 0, 'lime', label='Defended Area')
 
     # Trajectories
     lt, = ax.plot([], [], [], 'r--', label='Threat')
@@ -449,14 +454,14 @@ if __name__ == "__main__":
         if idx < 0 or idx >= len(h['t']):
             return
 
-        lt.set_data(t_pos[:idx, 0], t_pos[:idx, 1])
-        lt.set_3d_properties(t_pos[:idx, 2])
+        lt.set_data(t_pos[:idx + 1, 0], t_pos[:idx + 1, 1])
+        lt.set_3d_properties(t_pos[:idx + 1, 2])
 
-        li.set_data(i_pos[:idx, 0], i_pos[:idx, 1])
-        li.set_3d_properties(i_pos[:idx, 2])
+        li.set_data(i_pos[:idx + 1, 0], i_pos[:idx + 1, 1])
+        li.set_3d_properties(i_pos[:idx + 1, 2])
 
-        lk.set_data(k_pos[:idx, 0], k_pos[:idx, 1])
-        lk.set_3d_properties(k_pos[:idx, 2])
+        lk.set_data(k_pos[:idx + 1, 0], k_pos[:idx + 1, 1])
+        lk.set_3d_properties(k_pos[:idx + 1, 2])
 
         pt.set_data([t_pos[idx, 0]], [t_pos[idx, 1]])
         pt.set_3d_properties([t_pos[idx, 2]])
@@ -477,6 +482,10 @@ if __name__ == "__main__":
             pi.set_visible(False)
         else:
             txt_stat.set_color("black")
+            # Restore markers when scrubbing back before the hit
+            expl.set_visible(False)
+            pt.set_visible(True)
+            pi.set_visible(True)
 
         return lt, li, lk, pt, pi, expl, txt_stat
 
