@@ -1,0 +1,2703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THAAD Engagement Replay</title>
+<meta name="description" content="Interactive 3D replay of a simulated terminal ballistic-missile intercept.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070a0f'/%3E%3Cpath d='M6 24a14 14 0 0 1 20 0' stroke='%23f2b45c' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M11 24a8 8 0 0 1 10 0' stroke='%23f2b45c' stroke-width='2.5' fill='none' stroke-linecap='round' opacity='.55'/%3E%3Ccircle cx='22.5' cy='8.5' r='2.6' fill='%23f0705a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>
+  :root {
+    --bg: #070a0f;
+    --surface: rgba(12, 16, 22, 0.72);
+    --surface-solid: rgba(15, 20, 27, 0.94);
+    --hairline: rgba(214, 228, 240, 0.08);
+    --hairline-2: rgba(214, 228, 240, 0.15);
+    --text: #e6ebf0;
+    --muted: #8d99a6;
+    --faint: #5b6673;
+
+    /* One UI accent; the other hues are reserved for the things in the scene */
+    --accent: #f2b45c;
+    --accent-ink: #1c1407;
+    --accent-soft: rgba(242, 180, 92, 0.14);
+    --threat: #f0705a;
+    --kv: #9ccfe8;
+    --safe: #7cc4a4;
+
+    --r-lg: 14px;
+    --r-md: 9px;
+    --r-sm: 6px;
+    --shadow: 0 20px 44px -16px rgba(1, 4, 9, 0.75);
+    --sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    --z-scene: 0;
+    --z-fx: 1;
+    --z-hud: 10;
+    --z-menu: 20;
+    --z-dialog: 30;
+    --z-loading: 40;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 400 13px/1.45 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  #scene { position: fixed; inset: 0; z-index: var(--z-scene); }
+  #scene canvas { display: block; }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: var(--z-fx);
+    background:
+      radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(3, 5, 9, 0.6) 100%),
+      linear-gradient(180deg, rgba(3, 5, 9, 0.35), transparent 18%, transparent 78%, rgba(3, 5, 9, 0.55));
+  }
+  #grain {
+    position: fixed; inset: -50%; pointer-events: none; z-index: var(--z-fx); opacity: 0.07; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: var(--z-hud); }
+  #hud > * { pointer-events: auto; }
+  .glass {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+  }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  h2 {
+    margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--text);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  h2 span { font-weight: 400; color: var(--faint); font-size: 11px; }
+  .flag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 600 10.5px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 5px 8px 5px 7px; border-radius: 4px;
+    color: var(--muted); background: rgba(214, 228, 240, 0.06);
+    transition: color 0.25s, background 0.25s;
+  }
+  .flag::before { content: ''; width: 6px; height: 6px; border-radius: 1px; background: currentColor; }
+
+  /* ---------- Brand (top-left) ---------- */
+  /* Left column: brand + telemetry, kept clear of the transport dock */
+  #hud > #left {
+    position: absolute; left: 18px; top: 18px; bottom: 132px; width: 272px;
+    display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+  }
+  #left > * { pointer-events: auto; }
+  #brand { flex: none; padding: 14px 16px 15px; transition: opacity 0.35s var(--ease), transform 0.35s var(--ease); }
+  .eyebrow { font: 500 11px/1 var(--mono); color: var(--faint); letter-spacing: 0.04em; }
+  #brand h1 { margin: 7px 0 10px; font-size: 21px; line-height: 1.1; font-weight: 600; letter-spacing: -0.025em; }
+  #brand .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #mode { color: var(--accent); background: var(--accent-soft); }
+  #rule { color: var(--muted); font-size: 12px; }
+  #scenario { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; text-wrap: pretty; }
+  #scenario b { color: var(--text); font-weight: 500; font-family: var(--mono); font-size: 11.5px; }
+
+  /* ---------- Mission clock + phases (top-center) ---------- */
+  #mission {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    padding: 12px 16px 11px; display: grid; gap: 10px; justify-items: center;
+  }
+  .clockrow { display: flex; align-items: center; gap: 12px; }
+  #clock { font: 500 26px/1 var(--mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  #clock .unit { color: var(--faint); font-size: 15px; margin-right: 2px; }
+  #status-chip.ok { color: var(--safe); background: rgba(124, 196, 164, 0.14); }
+  #status-chip.bad { color: var(--threat); background: rgba(240, 112, 90, 0.14); }
+  #status-chip.warn { color: var(--accent); background: var(--accent-soft); }
+  #status-chip.kv { color: var(--kv); background: rgba(156, 207, 232, 0.12); }
+  #status-chip.pulse { animation: pulse 0.9s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+
+  #phases { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; }
+  #phases li { display: flex; align-items: center; }
+  #phases li + li::before { content: ''; width: 22px; height: 1px; background: var(--hairline-2); margin: 0 4px; transition: background 0.3s; }
+  #phases li.done + li::before { background: rgba(242, 180, 92, 0.45); }
+  #phases button {
+    font: 500 11.5px/1 var(--sans); color: var(--faint); background: none; border: 0;
+    padding: 5px 6px; border-radius: var(--r-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    transition: color 0.2s, background 0.2s;
+  }
+  #phases button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; transition: background 0.2s, border-color 0.2s; }
+  #phases button:hover { color: var(--text); background: rgba(214, 228, 240, 0.06); }
+  #phases li.done button { color: var(--muted); }
+  #phases li.done button::before { background: var(--muted); border-color: var(--muted); }
+  #phases li.current button { color: var(--text); }
+  #phases li.current button::before { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  #phases li.current.ok button::before { background: var(--safe); border-color: var(--safe); box-shadow: 0 0 0 3px rgba(124, 196, 164, 0.18); }
+  #phases li.current.bad button::before { background: var(--threat); border-color: var(--threat); box-shadow: 0 0 0 3px rgba(240, 112, 90, 0.18); }
+
+  /* ---------- Telemetry (left) ---------- */
+  /* Cards keep their natural height; if the window is too short the column scrolls instead of clipping them */
+  #telemetry {
+    display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; scrollbar-width: none;
+    transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
+  }
+  #telemetry::-webkit-scrollbar { display: none; }
+  #telemetry .inst { flex: none; }
+  .inst { padding: 12px 14px 13px; position: relative; overflow: hidden; }
+  .inst::after { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px; border-radius: 0 2px 2px 0; background: var(--c); opacity: 0.85; }
+  .inst.threat { --c: var(--threat); }
+  .inst.kv { --c: var(--kv); }
+  .inst.eng { --c: var(--accent); }
+  .inst > header { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text); }
+  .inst > header .stage { margin-left: auto; font: 500 10.5px/1 var(--mono); color: var(--muted); letter-spacing: 0.02em; }
+  .big { margin: 8px 0 8px; display: flex; align-items: baseline; gap: 8px; }
+  .big span { font: 500 22px/1 var(--mono); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .big small { color: var(--faint); font-size: 11.5px; }
+  dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  dl div { display: grid; gap: 2px; }
+  dt { color: var(--faint); font-size: 11px; }
+  dd { margin: 0; font: 500 12.5px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+  .bar { height: 3px; border-radius: 2px; background: rgba(214, 228, 240, 0.07); margin-top: 10px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--kv), var(--accent) 70%, var(--threat)); transition: width 0.15s linear; }
+
+  /* ---------- Right column: debrief, event log, profile ---------- */
+  #side {
+    position: absolute; right: 18px; top: 18px; bottom: 150px; width: 320px;
+    display: flex; flex-direction: column; gap: 10px; justify-content: flex-end; pointer-events: none;
+    transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
+  }
+  #side > * { pointer-events: auto; }
+  #events { padding: 14px 16px 12px; flex: 0 1 auto; min-height: 64px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--hairline-2) transparent; }
+  #bda, #profilebox { flex: none; }
+  #log { list-style: none; margin: 0; padding: 0 0 0 2px; position: relative; }
+  #log::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 1px; background: var(--hairline-2); }
+  #log li { display: none; grid-template-columns: 12px 58px 1fr; align-items: baseline; gap: 6px; padding: 4px 0; font-size: 12.5px; line-height: 1.4; }
+  #log li.past { display: grid; }
+  #log li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; margin-left: 0.5px; background: var(--c, var(--muted)); box-shadow: 0 0 0 3px var(--bg); align-self: center; }
+  #log li .lt { color: var(--faint); font: 500 11px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  #log li .lx { color: var(--text); text-wrap: pretty; }
+  #log li.info { --c: var(--muted); }
+  #log li.warn { --c: var(--accent); }
+  #log li.kv { --c: var(--kv); }
+  #log li.ok { --c: var(--safe); }
+  #log li.ok .lx { color: var(--safe); font-weight: 600; }
+  #log li.bad { --c: var(--threat); }
+  #log li.bad .lx { color: var(--threat); font-weight: 600; }
+  #log li.latest { animation: enter 0.5s var(--ease); }
+  @keyframes enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  #profilebox { padding: 14px 16px 10px; }
+  #profile { width: 100%; height: 140px; display: block; }
+
+  #bda {
+    padding: 18px 18px 16px; border-color: var(--hairline-2);
+    display: none; opacity: 0; transform: translateX(16px);
+    transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
+  }
+  #bda.mounted { display: block; }
+  #bda.show { opacity: 1; transform: none; }
+  #bda .eyebrow { display: flex; justify-content: space-between; }
+  #bda-title { margin: 8px 0 4px; font-size: 22px; line-height: 1.1; font-weight: 600; letter-spacing: -0.025em; }
+  #bda-title.ok { color: var(--safe); }
+  #bda-title.bad { color: var(--threat); }
+  #bda-title.info { color: var(--kv); }
+  #bda-sub { margin: 0 0 12px; color: var(--muted); font-size: 12.5px; text-wrap: pretty; }
+  #bda-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; padding: 12px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+  #bda-rows div { display: grid; gap: 3px; }
+  #bda-rows dt { font-size: 11px; }
+  #bda-rows dd { font-size: 13px; }
+  #bda .actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  #bda .actions p { margin: 0 auto 0 0; color: var(--faint); font-size: 11.5px; }
+
+  /* ---------- Buttons ---------- */
+  button {
+    font: 500 12px/1 var(--sans); color: var(--text);
+    background: rgba(214, 228, 240, 0.05); border: 1px solid var(--hairline); border-radius: var(--r-sm);
+    padding: 7px 10px; cursor: pointer;
+    transition: background 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease), transform 0.12s var(--ease);
+  }
+  button:hover { background: rgba(214, 228, 240, 0.1); border-color: var(--hairline-2); }
+  button:active { transform: scale(0.97); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover { background: #f6c477; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover { color: var(--text); background: rgba(214, 228, 240, 0.06); }
+  button.icon { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; }
+  button.icon svg { width: 15px; height: 15px; }
+  kbd { font: 500 10px/1 var(--mono); color: var(--faint); border: 1px solid var(--hairline-2); border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; }
+
+  .seg { display: inline-flex; padding: 2px; gap: 2px; background: rgba(214, 228, 240, 0.04); border: 1px solid var(--hairline); border-radius: var(--r-md); }
+  .seg button { border: 0; background: transparent; color: var(--muted); padding: 6px 9px; border-radius: 6px; }
+  .seg button:hover { color: var(--text); background: rgba(214, 228, 240, 0.06); }
+  .seg button.on { color: var(--accent-ink); background: var(--accent); }
+  #speeds button { font-family: var(--mono); font-size: 11px; padding: 6px 7px; }
+
+  /* ---------- Transport dock (bottom) ---------- */
+  #transport {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    width: min(1060px, calc(100vw - 36px)); padding: 10px 12px 10px; display: grid; gap: 8px;
+  }
+  .row1, .row2 { display: flex; align-items: center; gap: 10px; }
+  .row2 { gap: 8px; }
+  .row2 .spacer { flex: 1; }
+  #timeline-wrap { position: relative; flex: 1; height: 34px; margin: 0 6px; }
+  #ticks { position: absolute; inset: 0; pointer-events: none; }
+  #ticks i { position: absolute; top: 11px; width: 2px; height: 12px; margin-left: -1px; border-radius: 1px; background: var(--c); }
+  #ticks i::after {
+    content: attr(data-label); position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    font: 500 10px/1 var(--sans); white-space: nowrap; color: var(--c);
+  }
+  #timeline { position: absolute; inset: 0; width: 100%; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+  #timeline::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--p, 0%), rgba(214, 228, 240, 0.12) var(--p, 0%)); }
+  #timeline::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(214, 228, 240, 0.12); }
+  #timeline::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+  #timeline::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); transition: transform 0.15s var(--ease); }
+  #timeline:hover::-webkit-slider-thumb { transform: scale(1.15); }
+  #timeline::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
+  #scrub-tip {
+    position: absolute; bottom: 34px; padding: 4px 6px; border-radius: 4px; transform: translateX(-50%);
+    font: 500 11px/1 var(--mono); color: var(--text); background: var(--surface-solid); border: 1px solid var(--hairline-2);
+    opacity: 0; pointer-events: none; transition: opacity 0.15s; white-space: nowrap;
+  }
+  #timeline-wrap:hover #scrub-tip { opacity: 1; }
+  #tlabel { font: 500 12px/1 var(--mono); color: var(--muted); min-width: 118px; text-align: right; font-variant-numeric: tabular-nums; }
+  #tlabel b { color: var(--text); font-weight: 500; }
+  .seg-label { color: var(--faint); font-size: 11.5px; margin: 0 2px 0 4px; }
+
+  .menu-wrap { position: relative; }
+  .menu {
+    position: absolute; bottom: calc(100% + 10px); right: 0; width: 230px; padding: 6px; z-index: var(--z-menu);
+    background: var(--surface-solid); display: none;
+  }
+  .menu.open { display: grid; animation: enter 0.2s var(--ease); }
+  .menu button {
+    display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 9px; text-align: left;
+    width: 100%; border: 0; background: transparent; padding: 8px 8px; border-radius: 6px; color: var(--muted);
+  }
+  .menu button:hover { background: rgba(214, 228, 240, 0.06); color: var(--text); }
+  .menu button::before {
+    content: ''; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--faint);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .menu button.on { color: var(--text); }
+  .menu button.on::before {
+    border-color: var(--accent); background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.5 7.2l2.3 2.3 4.7-5' stroke='%231c1407' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;
+  }
+  .menu .sep { height: 1px; background: var(--hairline); margin: 4px 2px; }
+
+  /* ---------- Labels in 3D ---------- */
+  .label3d { pointer-events: none; transition: opacity 0.2s; }
+  .label3d > div {
+    transform: translate(14px, -50%);
+    font: 600 11.5px/1.25 var(--sans); white-space: nowrap; color: var(--text);
+    padding: 4px 8px 5px 9px; border-left: 2px solid var(--c);
+    background: rgba(7, 10, 15, 0.62); border-radius: 0 5px 5px 0;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .label3d.left > div { transform: translate(calc(-100% - 14px), -50%); border-left: 0; border-right: 2px solid var(--c); border-radius: 5px 0 0 5px; text-align: right; padding: 4px 9px 5px 8px; }
+  .label3d small { display: block; font: 500 10.5px/1.3 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Toast, help, loading ---------- */
+  #toast {
+    position: absolute; left: 50%; top: 124px; transform: translate(-50%, -6px);
+    padding: 8px 12px; border-radius: var(--r-md); font-size: 12.5px; color: var(--text);
+    background: var(--surface-solid); border: 1px solid var(--hairline-2); box-shadow: var(--shadow);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+    display: flex; gap: 8px; align-items: center;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast kbd { margin-left: 2px; }
+
+  #help {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: var(--z-dialog);
+    width: min(520px, calc(100vw - 32px)); padding: 20px 22px 18px; background: var(--surface-solid);
+  }
+  #help[hidden] { display: none; }
+  #help header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  #help h2 { margin: 0; font-size: 15px; }
+  #help .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+  #help .k { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--hairline); color: var(--muted); font-size: 12.5px; }
+  #help .k span:last-child { display: flex; gap: 3px; }
+  #help p { margin: 14px 0 0; color: var(--faint); font-size: 12px; }
+
+  #loading {
+    position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: var(--z-loading);
+    transition: opacity 0.7s var(--ease);
+  }
+  #loading.gone { opacity: 0; pointer-events: none; }
+  #loading .card { display: grid; gap: 12px; justify-items: center; color: var(--muted); }
+  #loading .card strong { color: var(--text); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  #loading .line { width: 160px; height: 2px; border-radius: 1px; background: rgba(214, 228, 240, 0.08); overflow: hidden; }
+  #loading .line::after { content: ''; display: block; width: 40%; height: 100%; background: var(--accent); animation: load 1.1s var(--ease) infinite; }
+  @keyframes load { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+  #loading .err { color: var(--threat); max-width: 460px; text-align: center; line-height: 1.6; }
+
+  /* ---------- Analysis drawer ---------- */
+  #analysis {
+    position: absolute; top: 132px; right: 18px; bottom: 150px; width: min(800px, calc(100vw - 330px));
+    display: none; flex-direction: column; background: var(--surface-solid); overflow: hidden;
+  }
+  body.analysis #analysis { display: flex; animation: enter 0.25s var(--ease); }
+  body.analysis #side { opacity: 0; transform: translateX(12px); pointer-events: none; }
+  body.analysis #side * { pointer-events: none; }
+  #analysis > header { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--hairline); }
+  #analysis > header h2 { margin: 0 6px 0 0; font-size: 14px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs button { background: transparent; border: 0; color: var(--muted); padding: 8px 10px; border-radius: 6px; }
+  .tabs button:hover { color: var(--text); background: rgba(214, 228, 240, 0.05); }
+  .tabs button[aria-selected="true"] { color: var(--text); background: rgba(214, 228, 240, 0.07); box-shadow: inset 0 -2px 0 var(--accent); }
+  #analysis .tools { margin-left: auto; display: flex; gap: 6px; }
+  #analysis .body { flex: 1; overflow: auto; padding: 14px 16px 20px; scrollbar-width: thin; scrollbar-color: var(--hairline-2) transparent; }
+  #analysis .intro { margin: 0 0 14px; color: var(--faint); font-size: 12px; max-width: 80ch; }
+  .figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 18px; }
+  figure.fig { margin: 0; min-width: 0; }
+  .fig-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .fig-title { font-weight: 600; font-size: 12.5px; }
+  .fig-unit { color: var(--faint); font: 500 11px/1 var(--mono); }
+  .legend { margin-left: auto; display: flex; gap: 10px; font-size: 11px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .legend i { width: 12px; height: 2px; border-radius: 1px; background: var(--c); }
+  .legend i.band { height: 8px; opacity: 0.4; border-radius: 2px; }
+  .legend i.dash { background: repeating-linear-gradient(90deg, var(--c) 0 3px, transparent 3px 6px); }
+  .plot { position: relative; height: 156px; }
+  .plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .plot canvas.ov { cursor: crosshair; }
+  .fig figcaption { margin-top: 6px; color: var(--faint); font-size: 11.5px; line-height: 1.5; text-wrap: pretty; }
+  .fig figcaption b { color: var(--muted); font-weight: 600; }
+  .tip {
+    position: absolute; pointer-events: none; padding: 6px 8px; border-radius: 6px; z-index: 2; display: none;
+    background: rgba(7, 10, 15, 0.94); border: 1px solid var(--hairline-2);
+    font: 500 11px/1.5 var(--mono); color: var(--text); white-space: nowrap;
+  }
+  .tip span { display: block; }
+  .tip i { display: inline-block; width: 9px; height: 2px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; }
+  .stat { margin: 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: rgba(214, 228, 240, 0.03); }
+  .stat dt { font-size: 11px; color: var(--faint); }
+  .stat dd { font: 500 18px/1.2 var(--mono); margin-top: 5px; }
+  .stat small { display: block; color: var(--faint); font-size: 10.5px; margin-top: 4px; line-height: 1.35; }
+
+  .methods { display: grid; gap: 22px; max-width: 76ch; }
+  .methods h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .methods h3 span { color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 11px; margin-right: 6px; }
+  .methods p { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; line-height: 1.6; text-wrap: pretty; }
+  .eq { margin: 6px 0 10px; padding: 6px 12px; border-left: 2px solid var(--hairline-2); overflow-x: auto; overflow-y: hidden; color: var(--text); }
+  .eq .katex-display { margin: 0.3em 0; }
+  .methods code { font: 500 11.5px var(--mono); color: var(--text); }
+  table.params { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.params th, table.params td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--hairline); vertical-align: baseline; }
+  table.params th { color: var(--faint); font-weight: 500; font-size: 11px; }
+  table.params td { color: var(--muted); }
+  table.params td.v { font-family: var(--mono); color: var(--text); text-align: right; white-space: nowrap; }
+  table.params td.u { font-family: var(--mono); color: var(--faint); white-space: nowrap; }
+  table.params td.sym { color: var(--text); }
+  .cmd { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .cmd code { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--hairline); background: rgba(214, 228, 240, 0.04); overflow-x: auto; white-space: nowrap; }
+  ul.assume { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
+
+  /* ---------- Scientific reference overlays ---------- */
+  /* Scale bar and axis triad live in the dock's free space so they never cover the scene */
+  .row2 .spacer { display: flex; justify-content: center; min-width: 0; overflow: hidden; }
+  #refs { display: none; align-items: center; gap: 12px; }
+  body.sci #refs { display: flex; }
+  #triad { width: 36px; height: 36px; flex: none; }
+  #scalebar { display: flex; align-items: center; gap: 8px; font: 500 11px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+  #scalebar .sb { height: 6px; width: 100px; border: 1.5px solid var(--muted); border-top: 0; transition: width 0.15s; }
+  body.sci #grain { display: none; }
+  body.sci #vignette { opacity: 0.5; }
+  .label3d.gridlbl > div {
+    transform: translate(-50%, 6px); padding: 0; border: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+    font: 500 10px/1 var(--mono); color: rgba(214, 228, 240, 0.5);
+  }
+
+  @media (max-width: 1100px) { .figs, .stats { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 860px) { #analysis { left: 18px; width: auto; top: 90px; } }
+
+  /* ---------- Focus mode ---------- */
+  body.focus #brand, body.focus #telemetry { opacity: 0; transform: translateX(-12px); pointer-events: none; }
+  body.focus #side { opacity: 0; transform: translateX(12px); pointer-events: none; }
+  body.focus #side * { pointer-events: none; }
+  body.focus #mission { opacity: 0.85; }
+  button.on-toggle { color: var(--accent); border-color: rgba(242, 180, 92, 0.4); background: var(--accent-soft); }
+
+  @media (max-width: 1280px) { #profilebox { display: none; } }
+  /* Short windows (laptops, scaled displays): compact the panels */
+  @media (max-height: 880px) {
+    #scenario, #brand .eyebrow { display: none; }
+    #brand { padding: 11px 14px 12px; }
+    #brand h1 { font-size: 17px; margin: 0 0 8px; }
+    #telemetry { gap: 8px; }
+    .inst { padding: 9px 12px 10px; }
+    .inst::after { top: 10px; bottom: 10px; }
+    .big { margin: 5px 0 6px; }
+    .big span { font-size: 19px; }
+    dl { gap: 5px 8px; }
+    .bar { margin-top: 7px; }
+    #profile { height: 112px; }
+    body.bda-on #profilebox { display: none; }
+    #mission { padding: 9px 14px 8px; gap: 7px; }
+    #clock { font-size: 22px; }
+    #analysis { top: 112px; }
+  }
+  @media (max-width: 1120px) {
+    #events { display: none; }
+    #phases { display: none; }
+  }
+  @media (max-width: 860px) {
+    #telemetry, #scenario, #brand .eyebrow, #cam-wrap .seg-label, #speeds, #speed-label { display: none; }
+    #hud > #left { width: 46vw; bottom: auto; }
+    #brand { padding: 10px 12px; }
+    #brand h1 { font-size: 16px; margin: 0 0 6px; }
+    #mission { left: auto; right: 18px; transform: none; padding: 10px 12px; }
+    #clock { font-size: 19px; }
+    #side { width: calc(100vw - 36px); bottom: 150px; }
+    #tlabel { min-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<main id="scene" aria-label="3D engagement view"></main>
+<div id="vignette"></div>
+<div id="grain"></div>
+
+<div id="hud">
+  <section id="mission" class="glass" aria-label="Mission clock">
+    <div class="clockrow">
+      <span id="clock"><span class="unit">T+</span>000.00</span>
+      <span id="status-chip" class="flag" aria-live="polite">Tracking</span>
+    </div>
+    <ol id="phases" aria-label="Engagement phases"></ol>
+  </section>
+
+  <div id="left">
+  <header id="brand" class="glass">
+    <div class="eyebrow">THAAD · terminal defense sim</div>
+    <h1>Engagement replay</h1>
+    <div class="meta"><span id="mode" class="flag"></span><span id="rule"></span></div>
+    <p id="scenario"></p>
+  </header>
+
+  <aside id="telemetry" aria-label="Telemetry">
+    <article class="glass inst threat">
+      <header>Threat</header>
+      <div class="big"><span id="th-alt">—</span><small>altitude</small></div>
+      <dl>
+        <div><dt>Speed</dt><dd id="th-spd">—</dd></div>
+        <div><dt>Ground range</dt><dd id="th-rng">—</dd></div>
+        <div title="1σ position uncertainty from the Kalman covariance (3D)"><dt>Track σ</dt><dd id="th-sig">—</dd></div>
+        <div title="Kalman estimate minus truth (3D)"><dt>Track error</dt><dd id="th-err">—</dd></div>
+      </dl>
+    </article>
+    <article class="glass inst kv">
+      <header>Interceptor <span id="kv-stage" class="stage">On launcher</span></header>
+      <div class="big"><span id="kv-alt">—</span><small>altitude</small></div>
+      <dl>
+        <div><dt>Speed</dt><dd id="kv-spd">—</dd></div>
+        <div><dt>Acceleration</dt><dd id="kv-g">—</dd></div>
+      </dl>
+      <div class="bar" aria-hidden="true"><i id="kv-gbar"></i></div>
+    </article>
+    <article class="glass inst eng">
+      <header>Engagement</header>
+      <div class="big"><span id="en-ttg">—</span><small>time to go</small></div>
+      <dl>
+        <div><dt>Separation</dt><dd id="en-sep">—</dd></div>
+        <div><dt>Closing speed</dt><dd id="en-cls">—</dd></div>
+      </dl>
+    </article>
+  </aside>
+
+  </div>
+
+  <aside id="side">
+    <section id="bda" class="glass" aria-live="polite" aria-label="Engagement result">
+      <div class="eyebrow"><span>Battle damage assessment</span><span id="bda-time"></span></div>
+      <div id="bda-title"></div>
+      <p id="bda-sub"></p>
+      <dl id="bda-rows"></dl>
+      <div class="actions">
+        <p>Run the script again for a new scenario.</p>
+        <button id="bda-close" class="ghost">Dismiss</button>
+        <button id="bda-replay" class="primary">Replay</button>
+      </div>
+    </section>
+    <section id="events" class="glass">
+      <h2>Event log</h2>
+      <ol id="log"></ol>
+    </section>
+    <section id="profilebox" class="glass">
+      <h2>Side profile <span>altitude vs ground range, km</span></h2>
+      <canvas id="profile" aria-label="Altitude versus ground range chart"></canvas>
+    </section>
+  </aside>
+
+  <nav id="transport" class="glass" aria-label="Playback">
+    <div class="row1">
+      <button id="restart" class="icon ghost" title="Restart (Home)" aria-label="Restart">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 8.2A5.4 5.4 0 1 0 4.2 4.3"/><path d="M2.4 2.4v3.2h3.2"/></svg>
+      </button>
+      <button id="play" class="icon primary" title="Play / pause (Space)" aria-label="Pause"></button>
+      <div id="timeline-wrap">
+        <div id="ticks"></div>
+        <input id="timeline" type="range" min="0" max="1" step="0.001" value="0" aria-label="Replay time">
+        <div id="scrub-tip"></div>
+      </div>
+      <div id="tlabel"></div>
+      <div class="seg" id="speeds" role="group" aria-label="Playback speed"></div>
+    </div>
+    <div class="row2">
+      <span class="seg-label" id="cam-label">Camera</span>
+      <div class="seg" id="cam-btns" role="group" aria-labelledby="cam-label">
+        <button data-cam="cinematic" title="Cinematic (C)">Cinematic</button>
+        <button data-cam="orbit" title="Free orbit (O)">Orbit</button>
+        <button data-cam="threat" title="Chase threat (T)">Threat</button>
+        <button data-cam="kv" title="Chase interceptor (I)">Interceptor</button>
+        <button data-cam="top" title="Top-down (V)">Top</button>
+      </div>
+      <div class="spacer">
+        <div id="refs" aria-hidden="true" title="Scale at the camera's focus point; axes are east, north, up">
+          <canvas id="triad"></canvas>
+          <div id="scalebar"><div class="sb" id="sb-bar"></div><span id="sb-label">10 km</span></div>
+        </div>
+      </div>
+      <button id="style-btn" title="Scientific or cinematic rendering (G)" aria-pressed="true">Scientific</button>
+      <div class="menu-wrap">
+        <button id="layers-btn" aria-haspopup="true" aria-expanded="false" title="Scene layers">Layers</button>
+        <div id="layer-btns" class="menu glass" role="menu" aria-label="Scene layers">
+          <button data-layer="radar" role="menuitemcheckbox">Radar returns <kbd>R</kbd></button>
+          <button data-layer="track" role="menuitemcheckbox">Kalman track <kbd>K</kbd></button>
+          <button data-layer="los" role="menuitemcheckbox">Line of sight <kbd>L</kbd></button>
+          <button data-layer="labels" role="menuitemcheckbox">Labels <kbd>H</kbd></button>
+          <div class="sep"></div>
+          <button data-layer="slowmo" role="menuitemcheckbox">Slow motion at intercept <kbd>M</kbd></button>
+        </div>
+      </div>
+      <button id="analysis-btn" title="Analysis figures and methods (A)" aria-pressed="false">Analysis</button>
+      <button id="focus-btn" title="Hide panels (F)">Focus</button>
+      <button id="help-btn" class="icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+    </div>
+  </nav>
+
+  <section id="analysis" class="glass" aria-label="Analysis">
+    <header>
+      <h2>Analysis</h2>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="kin" aria-selected="true">Kinematics</button>
+        <button role="tab" data-tab="gui" aria-selected="false">Guidance</button>
+        <button role="tab" data-tab="kf" aria-selected="false">Kalman filter</button>
+        <button role="tab" data-tab="methods" aria-selected="false">Methods</button>
+      </div>
+      <div class="tools">
+        <button id="csv-btn" title="Download the full time series as CSV">Export CSV</button>
+        <button id="analysis-close" class="icon ghost" title="Close (A)" aria-label="Close analysis">✕</button>
+      </div>
+    </header>
+    <div class="body">
+      <p class="intro" id="analysis-intro">All figures share one time axis: seconds since the first radar track. The amber line is the replay cursor and dashed lines mark launch, burnout and the end of the engagement. Hover a figure to read values; click it to jump there.</p>
+      <div id="tab-kin" class="tabpanel" role="tabpanel"></div>
+      <div id="tab-gui" class="tabpanel" role="tabpanel" hidden></div>
+      <div id="tab-kf" class="tabpanel" role="tabpanel" hidden></div>
+      <div id="tab-methods" class="tabpanel" role="tabpanel" hidden></div>
+    </div>
+  </section>
+
+  <div id="toast" role="status"></div>
+</div>
+
+<section id="help" class="glass" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
+  <header><h2 id="help-title">Keyboard shortcuts</h2><button id="help-close" class="ghost">Close <kbd>Esc</kbd></button></header>
+  <div class="grid">
+    <div class="k"><span>Play / pause</span><span><kbd>Space</kbd></span></div>
+    <div class="k"><span>Cinematic camera</span><span><kbd>C</kbd></span></div>
+    <div class="k"><span>Step 1 s</span><span><kbd>←</kbd><kbd>→</kbd></span></div>
+    <div class="k"><span>Free orbit</span><span><kbd>O</kbd></span></div>
+    <div class="k"><span>Step 5 s</span><span><kbd>Shift</kbd><kbd>←</kbd><kbd>→</kbd></span></div>
+    <div class="k"><span>Chase threat</span><span><kbd>T</kbd></span></div>
+    <div class="k"><span>Start / end</span><span><kbd>Home</kbd><kbd>End</kbd></span></div>
+    <div class="k"><span>Chase interceptor</span><span><kbd>I</kbd></span></div>
+    <div class="k"><span>Speed 0.25× – 20×</span><span><kbd>1</kbd>–<kbd>6</kbd></span></div>
+    <div class="k"><span>Top-down</span><span><kbd>V</kbd></span></div>
+    <div class="k"><span>Focus mode</span><span><kbd>F</kbd></span></div>
+    <div class="k"><span>Analysis figures</span><span><kbd>A</kbd></span></div>
+    <div class="k"><span>Scientific / cinematic style</span><span><kbd>G</kbd></span></div>
+    <div class="k"><span>Layers</span><span><kbd>R</kbd><kbd>K</kbd><kbd>L</kbd><kbd>H</kbd><kbd>M</kbd></span></div>
+  </div>
+  <p>Drag anywhere in the scene to spin the camera and scroll to zoom; right-drag pans. Grabbing a chase camera keeps the orbit centered on that vehicle. Press <kbd>C</kbd>, <kbd>T</kbd>, <kbd>I</kbd> or <kbd>V</kbd> to hand the camera back.</p>
+</section>
+
+<div id="loading"><div class="card"><strong>Engagement replay</strong><div class="line"></div><span>Loading scene</span></div></div>
+
+<script id="replay-data" type="application/json">__REPLAY_DATA__</script>
+<script>
+  // Shown if the module below never starts (e.g. no internet for the Three.js CDN)
+  setTimeout(function () {
+    if (!window.__viewerReady) {
+      document.getElementById('loading').innerHTML =
+        '<div class="err">Couldn’t load Three.js from cdn.jsdelivr.net.<br>' +
+        'The replay viewer needs an internet connection the first time it loads.</div>';
+    }
+  }, 8000);
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+window.__viewerReady = true;
+
+// ============================================================================
+// DATA
+// ============================================================================
+const D = JSON.parse(document.getElementById('replay-data').textContent);
+const KM = 0.001;
+const G_KM = 9.81 * KM;
+const N = D.t.length;
+const T = Float64Array.from(D.t);
+
+// Sim frame is x = East, y = North, z = Up (metres). Three.js is y-up, so we
+// map (x, y, z) -> (x, z, -y) and work in kilometres.
+function toThree(flat) {
+  const out = new Float32Array(flat.length);
+  for (let i = 0; i < flat.length; i += 3) {
+    out[i] = flat[i] * KM;
+    out[i + 1] = flat[i + 2] * KM;
+    out[i + 2] = -flat[i + 1] * KM;
+  }
+  return out;
+}
+const vec = (p) => new THREE.Vector3(p[0] * KM, p[2] * KM, -p[1] * KM);
+
+const P = {
+  threat: toThree(D.threat),
+  kv: toThree(D.interceptor),
+  track: toThree(D.track),
+  radar: toThree(D.radar),
+};
+
+function locate(time) {
+  if (time <= T[0]) return [0, 0];
+  if (time >= T[N - 1]) return [N - 2, 1];
+  let lo = 0, hi = N - 1;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (T[m] <= time) lo = m; else hi = m;
+  }
+  return [lo, (time - T[lo]) / Math.max(T[lo + 1] - T[lo], 1e-9)];
+}
+function sample(arr, time, out = new THREE.Vector3()) {
+  const [i, f] = locate(time);
+  const a = 3 * i, b = 3 * (i + 1);
+  return out.set(
+    arr[a] + (arr[b] - arr[a]) * f,
+    arr[a + 1] + (arr[b + 1] - arr[a + 1]) * f,
+    arr[a + 2] + (arr[b + 2] - arr[a + 2]) * f,
+  );
+}
+function velocity(arr, time, out = new THREE.Vector3()) {
+  const h = 0.05;
+  const tc = Math.min(Math.max(time, T[0]), T[N - 1]);
+  const t0 = Math.max(T[0], tc - h), t1 = Math.min(T[N - 1], tc + h);
+  if (t1 - t0 < 1e-6) return out.set(0, 0, 0);
+  const a = sample(arr, t0, new THREE.Vector3());
+  return sample(arr, t1, out).sub(a).divideScalar(t1 - t0);
+}
+
+// Key events
+const launchIdx = D.status.findIndex((s) => s > 0);
+const launchT = launchIdx >= 0 ? T[launchIdx] : null;
+const burnIdx = D.stage.findIndex((s) => s === 2);
+const burnT = burnIdx >= 0 ? T[burnIdx] : null;
+const killT = D.kill ? D.kill.time : null;
+const impactT = (D.outcome === 'GROUND' || D.outcome === 'NO ENGAGE') ? T[N - 1] : null;
+const endEventT = killT ?? impactT;
+const tStart = T[0];
+const tEnd = T[N - 1] + (endEventT != null ? 7 : 1);
+
+let terminalT = null;
+if (launchIdx >= 0) {
+  for (let i = Math.max(launchIdx, burnIdx); i < N && i >= 0; i++) {
+    const dx = P.threat[3 * i] - P.kv[3 * i], dy = P.threat[3 * i + 1] - P.kv[3 * i + 1], dz = P.threat[3 * i + 2] - P.kv[3 * i + 2];
+    if (Math.hypot(dx, dy, dz) < 15) { terminalT = T[i]; break; }
+  }
+}
+
+const killPos = D.kill ? vec(D.kill.pos) : null;
+const impactPos = impactT != null ? sample(P.threat, impactT).setY(0) : null;
+const pipPos = D.launchPip ? vec(D.launchPip).setY(0) : null;
+const threatStart = sample(P.threat, tStart);
+const defR = D.defendedRadius * KM;
+
+// ============================================================================
+// RENDERER / SCENE
+// ============================================================================
+const container = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+Object.assign(labelRenderer.domElement.style, { position: 'absolute', top: '0', left: '0', pointerEvents: 'none' });
+container.appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+const FOG_COLOR = new THREE.Color().setRGB(0.028, 0.05, 0.09);
+scene.fog = new THREE.Fog(FOG_COLOR, 160, 700);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 4000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxDistance = 600;
+controls.minDistance = 0.05;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.85, 0.5, 0.16);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const SUN_DIR = new THREE.Vector3(-0.55, 0.22, -0.8).normalize();
+scene.add(new THREE.HemisphereLight(0x5a78b0, 0x0a0806, 0.7));
+const sun = new THREE.DirectionalLight(0xffd7b0, 2.2);
+sun.position.copy(SUN_DIR).multiplyScalar(100);
+scene.add(sun);
+
+const realClock = { t: 0 };
+
+// ---------------------------------------------------------------------------
+// Sky dome + stars (follows the camera)
+// ---------------------------------------------------------------------------
+const sky = new THREE.Group();
+sky.add(new THREE.Mesh(
+  new THREE.SphereGeometry(1800, 48, 24),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { uSun: { value: SUN_DIR } },
+    vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      uniform vec3 uSun; varying vec3 vDir;
+      void main(){
+        vec3 d = normalize(vDir); float h = d.y;
+        vec3 zen = vec3(0.002, 0.004, 0.012);
+        vec3 hor = vec3(0.028, 0.05, 0.09);
+        vec3 col = mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.4));
+        float s = max(dot(d, uSun), 0.0);
+        col += vec3(1.0, 0.42, 0.16) * pow(s, 6.0) * 0.22 * (1.0 - clamp(h * 2.5, 0.0, 1.0));
+        col += vec3(1.0, 0.7, 0.4) * pow(s, 400.0) * 3.0;
+        if (h < 0.0) col = mix(hor, vec3(0.006, 0.008, 0.012), clamp(-h * 6.0, 0.0, 1.0));
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  }),
+));
+{
+  const n = 3000, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const u = Math.random(), v = Math.random() * 0.95 + 0.05;
+    const th = 2 * Math.PI * u, y = v, r = Math.sqrt(1 - y * y);
+    pos.set([Math.cos(th) * r * 1700, y * 1700, Math.sin(th) * r * 1700], 3 * i);
+    const b = 0.06 + Math.pow(Math.random(), 5) * 0.9;
+    col.set([b * 0.85, b * 0.92, b], 3 * i);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const starTex = glowTexture([[0, 'rgba(255,255,255,1)'], [0.35, 'rgba(255,255,255,0.4)'], [1, 'rgba(255,255,255,0)']]);
+  sky.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 3, map: starTex, sizeAttenuation: false, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })));
+}
+sky.children.forEach((c) => { c.renderOrder = -10; c.frustumCulled = false; });
+scene.add(sky);
+
+// ---------------------------------------------------------------------------
+// Terrain: flat defended plain (sim ground is z = 0) rising into hills
+// ---------------------------------------------------------------------------
+function hash2(x, y) { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); }
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, y) { let s = 0, a = 0.5, f = 1; for (let o = 0; o < 5; o++) { s += a * vnoise(x * f, y * f); f *= 2.03; a *= 0.5; } return s; }
+const smooth = (e0, e1, x) => { const t = Math.min(Math.max((x - e0) / (e1 - e0), 0), 1); return t * t * (3 - 2 * t); };
+
+const terrainMat = (() => {
+  const geo = new THREE.PlaneGeometry(520, 520, 300, 300);
+  geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i), r = Math.hypot(x, z);
+    const ridge = fbm(x / 38 + 7.3, z / 38 - 3.1);
+    p.setY(i, Math.pow(ridge, 2.2) * 10 * smooth(60, 170, r));
+  }
+  geo.computeVertexNormals();
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uSun: { value: SUN_DIR }, uFog: { value: FOG_COLOR }, uDefR: { value: defR },
+      uSweep: { value: 0 }, uSweepOn: { value: 1 }, uReal: { value: 0 }, uPip: { value: new THREE.Vector2() }, uPipOn: { value: 0 },
+    },
+    vertexShader: `
+      varying vec3 vW; varying vec3 vN;
+      void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `
+      uniform vec3 uSun; uniform vec3 uFog; uniform float uDefR; uniform float uSweep; uniform float uReal;
+      uniform vec2 uPip; uniform float uPipOn; uniform float uSweepOn;
+      varying vec3 vW; varying vec3 vN;
+      float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+        return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
+      float fb(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ s += a*vn(p); p *= 2.07; a *= 0.5; } return s; }
+      float line(float c, float w){ float d = abs(fract(c - 0.5) - 0.5) / fwidth(c); return 1.0 - min(d / w, 1.0); }
+      void main(){
+        vec2 p = vW.xz; float r = length(p);
+        float m = fb(p * 0.09) * 0.7 + fb(p * 0.6) * 0.3;
+        vec3 base = mix(vec3(0.028, 0.034, 0.036), vec3(0.075, 0.072, 0.062), m);
+        base = mix(base, vec3(0.11, 0.095, 0.075), clamp(vW.y / 4.0, 0.0, 1.0));
+        float diff = max(dot(normalize(vN), uSun), 0.0);
+        vec3 col = base * (0.45 + 1.4 * diff);
+
+        float camD = length(cameraPosition - vW);
+        float g10 = max(line(p.x / 10.0, 1.0), line(p.y / 10.0, 1.0));
+        float g2 = max(line(p.x / 2.0, 1.0), line(p.y / 2.0, 1.0)) * (1.0 - smoothstep(15.0, 45.0, camD));
+        float gridFade = 1.0 - smoothstep(90.0, 160.0, r);
+        col += vec3(0.28, 0.38, 0.48) * (g10 * 0.16 + g2 * 0.06) * gridFade;
+
+        float rings = line(r / 10.0, 1.2) * (1.0 - smoothstep(50.0, 62.0, r));
+        col += vec3(0.3, 0.42, 0.52) * rings * 0.16;
+
+        float dr = 1.0 - smoothstep(0.0, fwidth(r) * 2.0 + 0.04, abs(r - uDefR));
+        dr *= clamp(0.12 / fwidth(r), 0.08, 1.0);  // dim the ring where it is seen edge-on
+        col += vec3(0.42, 0.8, 0.62) * dr * 0.75;
+        col += vec3(0.03, 0.08, 0.06) * (1.0 - smoothstep(uDefR - 0.5, uDefR, r)) * 0.5;
+
+        float ang = atan(p.y, p.x);
+        float sd = mod(uSweep - ang, 6.2831853);
+        float sweep = exp(-sd * 2.5) * (1.0 - smoothstep(uDefR * 1.5, uDefR * 1.75, r)) * smoothstep(0.2, 1.5, r);
+        col += vec3(0.42, 0.8, 0.62) * sweep * 0.14 * uSweepOn;
+
+        if (uPipOn > 0.0) {
+          float d = length(p - uPip);
+          float ph = fract(uReal * 0.55);
+          float ring = 1.0 - smoothstep(0.0, 0.18 + fwidth(d), abs(d - ph * 4.5));
+          col += vec3(1.0, 0.55, 0.12) * ring * (1.0 - ph) * 2.0 * uPipOn;
+          col += vec3(1.0, 0.5, 0.1) * (1.0 - smoothstep(0.0, 0.4, d)) * 1.5 * uPipOn;
+          float cross = (1.0 - smoothstep(0.0, 0.05 + fwidth(d), min(abs(p.x - uPip.x), abs(p.y - uPip.y)))) * (1.0 - smoothstep(0.6, 1.4, d));
+          col += vec3(1.0, 0.6, 0.2) * cross * uPipOn;
+        }
+
+        float fog = 1.0 - exp(-pow(camD * 0.0024, 1.5));
+        col = mix(col, uFog, clamp(fog, 0.0, 1.0));
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  scene.add(new THREE.Mesh(geo, mat));
+  return mat;
+})();
+if (pipPos) terrainMat.uniforms.uPip.value.set(pipPos.x, pipPos.z);
+
+// ---------------------------------------------------------------------------
+// Cloud deck well below the engagement, for depth and scale
+// ---------------------------------------------------------------------------
+const cloudMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  uniforms: { uTime: { value: 0 }, uSun: { value: SUN_DIR }, uFog: { value: FOG_COLOR } },
+  vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `
+    uniform float uTime; uniform vec3 uSun; uniform vec3 uFog; varying vec3 vW;
+    float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+      return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y); }
+    float fb(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ s += a*vn(p); p = p*2.03 + 7.1; a *= 0.5; } return s; }
+    void main(){
+      vec2 p = vW.xz * 0.045 + vec2(uTime * 0.004, uTime * 0.0015);
+      float d = fb(p);
+      float r = length(vW.xz);
+      // keep the defended area clear and fade out toward the horizon
+      float cover = smoothstep(0.5, 0.78, d) * smoothstep(20.0, 48.0, r) * (1.0 - smoothstep(220.0, 300.0, r));
+      if (cover < 0.01) discard;
+      float lit = smoothstep(0.5, 0.9, d);
+      vec3 col = mix(vec3(0.09, 0.11, 0.14), vec3(0.4, 0.39, 0.37), lit);
+      float sunSide = max(dot(normalize(vec3(uSun.x, 0.0, uSun.z)), normalize(vec3(vW.x, 0.0, vW.z))), 0.0);
+      col += vec3(0.22, 0.12, 0.05) * pow(sunSide, 4.0) * 0.5;
+      float camD = length(cameraPosition - vW);
+      col = mix(col, uFog, clamp(1.0 - exp(-pow(camD * 0.0028, 1.4)), 0.0, 1.0));
+      gl_FragColor = vec4(col, cover * 0.55);
+    }`,
+});
+const clouds = new THREE.Mesh(new THREE.PlaneGeometry(640, 640).rotateX(-Math.PI / 2), cloudMat);
+clouds.position.y = 9;
+clouds.renderOrder = 1;
+scene.add(clouds);
+
+// ---------------------------------------------------------------------------
+// Shared materials / textures
+// ---------------------------------------------------------------------------
+function glowTexture(stops) {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  stops.forEach(([o, col]) => grd.addColorStop(o, col));
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const GLOW = glowTexture([[0, 'rgba(255,255,255,1)'], [0.12, 'rgba(255,255,255,0.9)'], [0.35, 'rgba(255,255,255,0.25)'], [1, 'rgba(255,255,255,0)']]);
+const SOFT = glowTexture([[0, 'rgba(255,255,255,0.9)'], [0.5, 'rgba(255,255,255,0.25)'], [1, 'rgba(255,255,255,0)']]);
+
+function glowSprite(color, scale, { attenuate = false, tex = GLOW, opacity = 1 } = {}) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
+    sizeAttenuation: attenuate, opacity, fog: false,
+  }));
+  s.scale.setScalar(scale);
+  return s;
+}
+
+function fresnelMaterial(color, { power = 2.5, opacity = 1, scan = 0, radius = 1 } = {}) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uCol: { value: new THREE.Color(color) }, uPow: { value: power }, uOpacity: { value: opacity }, uScanOn: { value: scan }, uScan: { value: 0 }, uR: { value: radius } },
+    vertexShader: `varying vec3 vN; varying vec3 vW;
+      void main(){ vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `uniform vec3 uCol; uniform float uPow; uniform float uOpacity; uniform float uScanOn; uniform float uScan; uniform float uR;
+      varying vec3 vN; varying vec3 vW;
+      void main(){
+        vec3 v = normalize(cameraPosition - vW);
+        float fr = pow(1.0 - abs(dot(v, normalize(vN))), uPow);
+        float band = uScanOn * exp(-pow((vW.y / uR - uScan) * 28.0, 2.0)) * 0.4;
+        gl_FragColor = vec4(uCol * (fr + band) * uOpacity, 1.0);
+      }`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Trails: a thin always-visible line plus a tube for close-up views.
+// Both fade with age and only draw up to the current replay time.
+// ---------------------------------------------------------------------------
+const trailUniforms = [];
+const trailMinDefaults = [];
+const tubeMeshes = [];
+const trailVS = `attribute float aTime; varying float vTime; varying vec3 vW;
+  void main(){ vTime = aTime; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+const trailFS = `uniform float uNow; uniform float uFade; uniform float uMin; uniform float uSplit;
+  uniform vec3 uColA; uniform vec3 uColB; uniform float uGain; varying float vTime; varying vec3 vW;
+  void main(){
+    if (vTime > uNow) discard;
+    float age = uNow - vTime;
+    float a = mix(uMin, 1.0, exp(-age / uFade));
+    a *= smoothstep(0.6, 3.0, length(cameraPosition - vW));
+    vec3 c = vTime < uSplit ? uColA : uColB;
+    gl_FragColor = vec4(c * a * uGain, 1.0);
+  }`;
+function trailMaterial(opts) {
+  const u = {
+    uNow: { value: -1e9 }, uFade: { value: opts.fade }, uMin: { value: opts.min },
+    uSplit: { value: opts.split ?? 1e9 }, uColA: { value: new THREE.Color(opts.colorA) },
+    uColB: { value: new THREE.Color(opts.colorB ?? opts.colorA) }, uGain: { value: opts.gain },
+  };
+  trailUniforms.push(u);
+  trailMinDefaults.push(opts.min);
+  return new THREE.ShaderMaterial({ uniforms: u, vertexShader: trailVS, fragmentShader: trailFS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+}
+
+class SampledCurve extends THREE.Curve {
+  constructor(arr, t0, t1) { super(); this.arr = arr; this.t0 = t0; this.t1 = t1; }
+  getPoint(u, out = new THREE.Vector3()) { return sample(this.arr, this.t0 + u * (this.t1 - this.t0), out); }
+  getUtoTmapping(u) { return u; }
+}
+
+function buildTrail(arr, i0, i1, opts) {
+  const group = new THREE.Group();
+  if (i1 - i0 < 2) return group;
+  const t0 = T[i0], t1 = T[i1];
+
+  const pts = arr.slice(3 * i0, 3 * (i1 + 1));
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+  lineGeo.setAttribute('aTime', new THREE.BufferAttribute(Float32Array.from(T.slice(i0, i1 + 1)), 1));
+  const line = new THREE.Line(lineGeo, trailMaterial({ ...opts, gain: opts.lineGain ?? 1.0 }));
+  line.frustumCulled = false;
+  group.add(line);
+
+  if (opts.radius) {
+    const segs = Math.min(4000, Math.max(64, Math.round((t1 - t0) / 0.04)));
+    const radial = 8;
+    const tube = new THREE.TubeGeometry(new SampledCurve(arr, t0, t1), segs, opts.radius, radial, false);
+    const at = new Float32Array((segs + 1) * (radial + 1));
+    for (let i = 0; i <= segs; i++) for (let j = 0; j <= radial; j++) at[i * (radial + 1) + j] = t0 + (i / segs) * (t1 - t0);
+    tube.setAttribute('aTime', new THREE.BufferAttribute(at, 1));
+    const mesh = new THREE.Mesh(tube, trailMaterial({ ...opts, gain: opts.tubeGain ?? 0.5 }));
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    tubeMeshes.push(mesh);
+  }
+  scene.add(group);
+  return group;
+}
+
+const lastIdx = N - 1;
+buildTrail(P.threat, 0, lastIdx, { colorA: 0xf0705a, fade: 14, min: 0.22, radius: 0.018, lineGain: 1.1, tubeGain: 0.55 });
+if (launchIdx >= 0) {
+  buildTrail(P.kv, launchIdx, lastIdx, {
+    colorA: 0xf2b45c, colorB: 0x9ccfe8, split: burnT ?? 1e9,
+    fade: 10, min: 0.25, radius: 0.03, lineGain: 1.2, tubeGain: 0.4,
+  });
+}
+const trackTrail = buildTrail(P.track, 0, lastIdx, { colorA: 0x7cc4a4, fade: 6, min: 0.08, lineGain: 0.55 });
+
+// Radar returns: raw noisy measurements shown for a few seconds after each scan
+const radarUniforms = { uNow: { value: -1e9 }, uWin: { value: 3.5 }, uPx: { value: 3.0 * renderer.getPixelRatio() }, uCol: { value: new THREE.Color(0xa8e0c4) } };
+const radarPts = (() => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(P.radar, 3));
+  g.setAttribute('aTime', new THREE.BufferAttribute(Float32Array.from(T), 1));
+  const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+    uniforms: radarUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `attribute float aTime; uniform float uNow; uniform float uWin; uniform float uPx; varying float vA;
+      void main(){ float age = uNow - aTime; vA = (age < 0.0 || age > uWin) ? 0.0 : 1.0 - age / uWin;
+        gl_PointSize = vA > 0.0 ? uPx : 0.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uCol; varying float vA;
+      void main(){ if (vA <= 0.0) discard; float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard;
+        gl_FragColor = vec4(uCol * vA * (1.0 - d * 1.6), 1.0); }`,
+  }));
+  pts.frustumCulled = false;
+  scene.add(pts);
+  return pts;
+})();
+
+// ---------------------------------------------------------------------------
+// Defended volume dome, battery, PIP marker
+// ---------------------------------------------------------------------------
+const DOME_OPACITY = 0.09;
+const domeMat = fresnelMaterial(0x7cc4a4, { power: 3.0, opacity: DOME_OPACITY, scan: 1, radius: defR });
+const dome = new THREE.Mesh(new THREE.SphereGeometry(defR, 96, 48, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+scene.add(dome);
+
+const metal = new THREE.MeshStandardMaterial({ color: 0x8c949c, metalness: 0.6, roughness: 0.45 });
+const darkMetal = new THREE.MeshStandardMaterial({ color: 0x2a2f35, metalness: 0.5, roughness: 0.6 });
+
+const battery = new THREE.Group();
+{
+  const truck = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.018, 0.022), darkMetal);
+  truck.position.y = 0.009;
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.016, 0.02), metal);
+  pod.position.set(0.004, 0.03, 0); pod.rotation.z = 0.9;
+  battery.add(truck, pod);
+  const beacon = glowSprite(0x7cc4a4, 0.02);
+  beacon.position.y = 0.05;
+  battery.add(beacon);
+  battery.userData.beacon = beacon;
+}
+scene.add(battery);
+
+// ---------------------------------------------------------------------------
+// Vehicles
+// ---------------------------------------------------------------------------
+const MODEL_SCALE = 8; // models are exaggerated so they read in close-up cameras
+
+function makeThreat() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.0009, 0.0035, 20).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3a2e2a, metalness: 0.3, roughness: 0.5, emissive: 0x401006 }));
+  g.add(body);
+  const model = new THREE.Group(); model.add(g); model.scale.setScalar(MODEL_SCALE);
+  const root = new THREE.Group();
+  root.add(model);
+  const heat = glowSprite(0xff7a2a, 0.045, { attenuate: true, tex: SOFT });
+  heat.position.z = 0.012;
+  model.add(heat);
+  const far = glowSprite(0xf0705a, 0.028);
+  root.add(far);
+  root.userData = { model, heat, far };
+  scene.add(root);
+  return root;
+}
+
+function makeInterceptor() {
+  const root = new THREE.Group();
+  const model = new THREE.Group(); model.scale.setScalar(MODEL_SCALE);
+  const booster = new THREE.Mesh(new THREE.CylinderGeometry(0.00035, 0.00035, 0.0045, 16).rotateX(Math.PI / 2), metal);
+  booster.position.z = -0.0012;
+  const kvBody = new THREE.Mesh(new THREE.CylinderGeometry(0.00028, 0.00035, 0.0012, 16).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xe8edf2, metalness: 0.4, roughness: 0.35 }));
+  kvBody.position.z = 0.0017;
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.00028, 0.0009, 16).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xdfe6ec, metalness: 0.5, roughness: 0.3 }));
+  nose.position.z = 0.0027;
+  model.add(booster, kvBody, nose);
+
+  const flame = glowSprite(0xffb050, 0.03, { attenuate: true, tex: SOFT });
+  flame.position.z = -0.0055;
+  model.add(flame);
+  const plume = glowSprite(0xff8a3a, 0.08, { attenuate: true, tex: SOFT, opacity: 0.5 });
+  plume.position.z = -0.012;
+  model.add(plume);
+  const divert = glowSprite(0xcfeaf7, 0.012, { attenuate: true });
+  model.add(divert);
+
+  root.add(model);
+  const far = glowSprite(0x9ccfe8, 0.03);
+  root.add(far);
+  root.userData = { model, booster, flame, plume, divert, far };
+  scene.add(root);
+  return root;
+}
+
+const threatObj = makeThreat();
+const kvObj = makeInterceptor();
+
+// Spent booster, separated at burnout and falling ballistically
+const spentBooster = (() => {
+  const root = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.00035, 0.00035, 0.0045, 16).rotateX(Math.PI / 2), metal);
+  const model = new THREE.Group(); model.add(m); model.scale.setScalar(MODEL_SCALE);
+  root.add(model);
+  const ember = glowSprite(0xff7a30, 0.012, { opacity: 0.8 });
+  root.add(ember);
+  root.visible = false;
+  root.userData = { model, ember };
+  scene.add(root);
+  if (burnT != null) {
+    root.userData.p0 = sample(P.kv, burnT);
+    root.userData.v0 = velocity(P.kv, burnT);
+  }
+  return root;
+})();
+
+// ---------------------------------------------------------------------------
+// Explosions (kill in the air, or threat ground impact)
+// ---------------------------------------------------------------------------
+function createExplosion(origin, { ground = false, inherit = new THREE.Vector3(), scale = 1 } = {}) {
+  const group = new THREE.Group();
+  group.position.copy(origin);
+  group.visible = false;
+  scene.add(group);
+
+  const flash = glowSprite(0xfff1d0, 1, { attenuate: true });
+  const fireball = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.MeshBasicMaterial({ color: ground ? 0xff7a2a : 0xff9a3a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  const shockMat = fresnelMaterial(ground ? 0xffb070 : 0xd6e6f2, { power: 2.2, opacity: 0.8 });
+  const shock = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), shockMat);
+  if (ground) shock.scale.y = 0.35;
+  group.add(fireball, shock, flash);
+
+  const n = ground ? 900 : 1200;
+  const vel = new Float32Array(n * 3), seed = new Float32Array(n);
+  const dir = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    dir.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+    if (dir.lengthSq() > 1 || dir.lengthSq() < 1e-4) { i--; continue; }
+    dir.normalize();
+    if (ground) dir.y = Math.abs(dir.y) * 0.9 + 0.1;
+    const speed = (0.08 + Math.pow(Math.random(), 2.2) * 1.3) * scale;
+    vel[3 * i] = dir.x * speed + inherit.x;
+    vel[3 * i + 1] = dir.y * speed + inherit.y;
+    vel[3 * i + 2] = dir.z * speed + inherit.z;
+    seed[i] = Math.random();
+  }
+  const pg = new THREE.BufferGeometry();
+  pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  pg.setAttribute('aVel', new THREE.BufferAttribute(vel, 3));
+  pg.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  const pu = { uAge: { value: 0 }, uG: { value: G_KM }, uPx: { value: renderer.getPixelRatio() } };
+  const debris = new THREE.Points(pg, new THREE.ShaderMaterial({
+    uniforms: pu, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `attribute vec3 aVel; attribute float aSeed; uniform float uAge; uniform float uG; uniform float uPx;
+      varying float vLife; varying float vSeed;
+      void main(){
+        float k = 0.55 + aSeed * 0.6;
+        vec3 p = aVel * (1.0 - exp(-k * uAge)) / k - vec3(0.0, 0.5 * uG * uAge * uAge, 0.0);
+        vLife = clamp(uAge / (2.5 + aSeed * 6.0), 0.0, 1.0); vSeed = aSeed;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = clamp((1.0 - vLife) * (1.0 + 2.0 * aSeed) * uPx * 35.0 / -mv.z, 0.0, 10.0 * uPx);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `varying float vLife; varying float vSeed;
+      void main(){
+        float d = length(gl_PointCoord - 0.5); if (d > 0.5 || vLife >= 1.0) discard;
+        vec3 hot = vec3(1.0, 0.95, 0.75), mid = vec3(1.0, 0.45, 0.12), cool = vec3(0.45, 0.08, 0.04);
+        vec3 c = vLife < 0.25 ? mix(hot, mid, vLife / 0.25) : mix(mid, cool, (vLife - 0.25) / 0.75);
+        float a = (1.0 - vLife) * (1.0 - d * 2.0);
+        gl_FragColor = vec4(c * a * 0.9, 1.0);
+      }`,
+  }));
+  debris.frustumCulled = false;
+  group.add(debris);
+
+  const light = new THREE.PointLight(0xffb070, 0, 60 * scale, 1.5);
+  group.add(light);
+
+  return {
+    group,
+    update(age) {
+      group.visible = age >= 0 && age < 14;
+      if (!group.visible) { light.intensity = 0; return; }
+      const fs = (age < 0.06 ? age / 0.06 : 1) * 2.2 * scale;
+      flash.scale.setScalar(Math.max(fs, 1e-3));
+      flash.material.opacity = Math.exp(-age * 5);
+      const fr = 0.45 * scale * (1 - Math.exp(-age * 4));
+      fireball.scale.setScalar(Math.max(fr, 1e-3));
+      if (ground) fireball.scale.y *= 0.6;
+      fireball.material.opacity = 0.35 * Math.exp(-age * 2.2);
+      const sr = 8 * scale * (1 - Math.exp(-age * 0.9));
+      shock.scale.set(sr, ground ? sr * 0.35 : sr, sr);
+      shockMat.uniforms.uOpacity.value = 0.35 * Math.exp(-age * 1.1);
+      pu.uAge.value = age;
+      light.intensity = 200 * scale * Math.exp(-age * 4);
+    },
+  };
+}
+
+let killFx = null, impactFx = null;
+if (killPos) {
+  const inh = velocity(P.threat, killT - 0.1).add(velocity(P.kv, killT - 0.1)).multiplyScalar(0.18);
+  killFx = createExplosion(killPos, { inherit: inh, scale: 1 });
+}
+if (impactPos) impactFx = createExplosion(impactPos, { ground: true, scale: 0.8 });
+
+// ---------------------------------------------------------------------------
+// LOS + radar beam lines
+// ---------------------------------------------------------------------------
+function dynLine(color, opacity) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
+  l.frustumCulled = false;
+  scene.add(l);
+  return l;
+}
+const losLine = dynLine(0xf2b45c, 0.32);
+const beamLine = dynLine(0x7cc4a4, 0.14);
+function setLine(l, a, b) { const p = l.geometry.attributes.position; p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true; }
+
+// ---------------------------------------------------------------------------
+// Reference geometry for the scientific style: drop lines, axis labels,
+// an altitude scale at the battery and exact intercept/impact markers
+// ---------------------------------------------------------------------------
+function dropLine(color) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const l = new THREE.Line(g, new THREE.LineDashedMaterial({ color, dashSize: 0.6, gapSize: 0.45, transparent: true, opacity: 0.5, depthWrite: false }));
+  l.frustumCulled = false;
+  scene.add(l);
+  return l;
+}
+function setDrop(l, p) {
+  const a = l.geometry.attributes.position;
+  a.setXYZ(0, p.x, p.y, p.z); a.setXYZ(1, p.x, 0, p.z); a.needsUpdate = true;
+  l.computeLineDistances();
+}
+const dropT = dropLine(0xf0705a);
+const dropI = dropLine(0x9ccfe8);
+
+const gridLabels = [];
+// kind 'alt' labels the altitude scale (perspective views); 'map' labels the ground axes (top-down view only)
+function gridLabel(text, pos, kind) {
+  const outer = document.createElement('div'); outer.className = 'label3d gridlbl';
+  const inner = document.createElement('div'); inner.textContent = text; outer.appendChild(inner);
+  const o = new CSS2DObject(outer); o.position.copy(pos); scene.add(o);
+  o.userData.kind = kind;
+  o.userData.inner = inner;
+  gridLabels.push(o);
+  return o;
+}
+const refGeo = new THREE.Group();
+{
+  const maxAlt = Math.ceil(Math.max(threatStart.y, 10) / 10) * 10;
+  const pts = [0, 0, 0, 0, maxAlt, 0];
+  for (let a = 10; a <= maxAlt; a += 10) {
+    pts.push(-0.4, a, 0, 0.4, a, 0);
+    if (a % 20 === 0) gridLabel(`${a} km`, new THREE.Vector3(0.6, a, 0), 'alt');
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  refGeo.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xd6e4f0, transparent: true, opacity: 0.28, depthWrite: false })));
+  for (let k = 10; k <= 60; k += 10) {
+    gridLabel(`${k} km E`, new THREE.Vector3(k, 0, 0), 'map');
+    gridLabel(`${k} km N`, new THREE.Vector3(0, 0, -k), 'map');
+  }
+  scene.add(refGeo);
+}
+
+function ringTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.strokeStyle = '#fff'; g.lineWidth = 7;
+  g.beginPath(); g.arc(64, 64, 38, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 5;
+  [[64, 4, 64, 34], [64, 94, 64, 124], [4, 64, 34, 64], [94, 64, 124, 64]].forEach(([a, b, c2, d]) => { g.beginPath(); g.moveTo(a, b); g.lineTo(c2, d); g.stroke(); });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const RING = ringTexture();
+function marker(color, pos) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color, sizeAttenuation: false, depthTest: false, transparent: true }));
+  sp.scale.setScalar(0.045);
+  sp.renderOrder = 5;
+  sp.visible = false;
+  if (pos) sp.position.copy(pos);
+  scene.add(sp);
+  return sp;
+}
+const killMarker = marker(0x7cc4a4, killPos);
+const impactMarker = marker(0xf0705a, impactPos);
+
+// ---------------------------------------------------------------------------
+// Labels
+// ---------------------------------------------------------------------------
+function label(color, side = 'right') {
+  const outer = document.createElement('div'); outer.className = side === 'left' ? 'label3d left' : 'label3d';
+  const inner = document.createElement('div'); inner.style.setProperty('--c', color); outer.appendChild(inner);
+  const obj = new CSS2DObject(outer); scene.add(obj);
+  obj.userData.inner = inner;
+  return obj;
+}
+const lblThreat = label('#f0705a');
+const lblKV = label('#9ccfe8', 'left');
+const lblBattery = label('#7cc4a4');
+lblBattery.position.set(0, 0.05, 0);
+lblBattery.userData.inner.innerHTML = 'THAAD battery';
+const lblPip = label('#f2b45c');
+if (pipPos) { lblPip.position.copy(pipPos); lblPip.userData.inner.innerHTML = 'PIP<small>predicted impact point</small>'; }
+const lblKill = label('#7cc4a4');
+if (killPos) { lblKill.position.copy(killPos); lblKill.userData.inner.innerHTML = `Intercept<small>${(D.kill.alt / 1000).toFixed(1)} km · miss ${D.kill.dist.toFixed(2)} m</small>`; }
+const lblImpact = label('#f0705a');
+if (impactPos) {
+  lblImpact.position.copy(impactPos);
+  const r = impactPos.length();
+  lblImpact.userData.inner.innerHTML = `Impact<small>${r.toFixed(1)} km from battery${r > defR ? ' · outside DA' : ''}</small>`;
+}
+
+// ============================================================================
+// HUD
+// ============================================================================
+const $ = (id) => document.getElementById(id);
+const fmtKm = (km) => `${km.toFixed(2)} km`;
+const fmtSpd = (kms) => `${Math.round(kms * 1000).toLocaleString('en-US')} m/s`;
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COL = {
+  threat: cssVar('--threat'), kv: cssVar('--kv'), safe: cssVar('--safe'),
+  accent: cssVar('--accent'), muted: cssVar('--muted'), faint: cssVar('--faint'),
+};
+
+const MODE_NAMES = { 'ENGINEERING MODE': 'Engineering', 'MAX-PERFORMANCE MODE': 'Max performance' };
+const RULE_NAMES = { 'PIP-GATED LAUNCH': 'PIP-gated launch', 'FIRE ON TRACK': 'Fires on track' };
+$('mode').textContent = MODE_NAMES[D.mode] ?? D.mode;
+$('rule').textContent = `${RULE_NAMES[D.engageRule] ?? D.engageRule}${D.seed != null ? ` · seed ${D.seed}` : ''}`;
+{
+  const alt = threatStart.y, rng = Math.hypot(threatStart.x, threatStart.z);
+  $('scenario').innerHTML =
+    `Threat appears at <b>${alt.toFixed(1)} km</b> altitude, <b>${rng.toFixed(1)} km</b> out. ` +
+    `Defended radius <b>${defR.toFixed(0)} km</b>, kill radius <b>${D.killRadius} m</b>.`;
+}
+
+const events = [{ t: tStart, text: 'Radar track initiated', cls: 'info' }];
+if (D.outcome === 'NO ENGAGE') events.push({ t: D.minTrackTime ?? tStart, text: 'PIP outside defended area — weapons hold', cls: 'info' });
+if (launchT != null) events.push({ t: launchT, text: D.engageRule === 'PIP-GATED LAUNCH' ? 'PIP inside defended area — launch' : 'Track confirmed — launch', cls: 'warn' });
+if (burnT != null) events.push({ t: burnT, text: 'Booster burnout, kill vehicle separates', cls: 'kv' });
+if (terminalT != null) events.push({ t: terminalT, text: 'Terminal homing, under 15 km', cls: 'kv' });
+if (killT != null) events.push({ t: killT, text: `Target destroyed — ${D.kill.dist.toFixed(2)} m miss`, cls: 'ok' });
+if (D.outcome === 'GROUND') events.push({ t: impactT, text: 'Threat impact — intercept failed', cls: 'bad' });
+if (D.outcome === 'NO ENGAGE') events.push({ t: impactT, text: 'Threat lands outside the defended area', cls: 'info' });
+if (D.outcome === 'TIMEOUT') events.push({ t: T[N - 1], text: 'Sim timeout, threat still airborne', cls: 'bad' });
+events.sort((a, b) => a.t - b.t);
+
+const logEl = $('log');
+events.forEach((e) => {
+  const li = document.createElement('li');
+  li.className = e.cls;
+  li.innerHTML = `<span class="lt">T+${e.t.toFixed(2)}</span><span class="lx">${e.text}</span>`;
+  logEl.appendChild(li);
+  e.el = li;
+});
+
+const tickColors = { info: COL.muted, warn: COL.accent, kv: COL.kv, ok: COL.safe, bad: COL.threat };
+const tickLabels = { warn: 'Launch', ok: 'Kill', bad: 'Impact' };
+events.slice(1).forEach((e) => {
+  const i = document.createElement('i');
+  i.style.left = `${((e.t - tStart) / (tEnd - tStart)) * 100}%`;
+  i.style.setProperty('--c', tickColors[e.cls]);
+  if (tickLabels[e.cls]) i.dataset.label = tickLabels[e.cls];
+  $('ticks').appendChild(i);
+});
+
+// Phase stepper under the clock; each phase is a jump target
+const phases = [{ label: 'Track', t: tStart }];
+if (D.outcome === 'NO ENGAGE') {
+  phases.push({ label: 'Hold', t: D.minTrackTime ?? tStart });
+} else {
+  if (launchT != null) phases.push({ label: 'Boost', t: launchT });
+  if (burnT != null) phases.push({ label: 'Midcourse', t: burnT });
+  if (terminalT != null) phases.push({ label: 'Terminal', t: terminalT });
+}
+if (killT != null) phases.push({ label: 'Kill', t: killT, end: 'ok' });
+else if (impactT != null) phases.push({ label: 'Impact', t: impactT, end: D.outcome === 'GROUND' ? 'bad' : 'info' });
+phases.forEach((p) => {
+  const li = document.createElement('li');
+  const b = document.createElement('button');
+  b.textContent = p.label;
+  b.title = `Jump to T+${p.t.toFixed(1)} s`;
+  // Outcome phases jump a few seconds early so the approach is visible
+  b.onclick = () => seek(p.end ? p.t - 3 : p.t);
+  li.appendChild(b);
+  if (p.end) li.classList.add(p.end);
+  $('phases').appendChild(li);
+  p.el = li;
+});
+
+// Debrief card
+{
+  const rows = [];
+  let title = '', cls = '', sub = '';
+  if (D.outcome === 'KILL') {
+    title = 'Target destroyed'; cls = 'ok';
+    sub = `Hit-to-kill at ${(D.kill.alt / 1000).toFixed(1)} km altitude.`;
+    rows.push(['Miss distance', `${D.kill.dist.toFixed(2)} m`], ['Closing speed', fmtSpd(D.kill.closing / 1000)],
+      ['Kill time', `T+${D.kill.time.toFixed(2)} s`], ['Kill altitude', `${(D.kill.alt / 1000).toFixed(1)} km`]);
+  } else if (D.outcome === 'GROUND') {
+    title = 'Intercept failed'; cls = 'bad';
+    const r = impactPos.length();
+    sub = `The threat reached the ground ${r <= defR ? 'inside' : 'outside'} the defended area.`;
+    rows.push(['Impact point', `${r.toFixed(1)} km out`], ['Defended area', r <= defR ? 'Inside' : 'Outside']);
+  } else if (D.outcome === 'NO ENGAGE') {
+    title = 'Weapons hold'; cls = 'info';
+    sub = 'The predicted impact point stayed outside the defended area, so no interceptor was launched.';
+    rows.push(['Impact point', `${impactPos.length().toFixed(1)} km out`], ['Defended radius', `${defR.toFixed(0)} km`]);
+  } else {
+    title = 'Sim timeout'; cls = 'bad';
+    sub = 'The simulation ended with the threat still airborne.';
+  }
+  if (pipPos) rows.push(['PIP at launch', `${pipPos.length().toFixed(1)} km out`]);
+  if (launchT != null && D.g.length) rows.push(['Peak acceleration', `${Math.max(...D.g).toFixed(1)} g`]);
+  $('bda-title').textContent = title;
+  $('bda-title').className = cls;
+  $('bda-sub').textContent = sub;
+  $('bda-time').textContent = endEventT != null ? `T+${endEventT.toFixed(2)}` : '';
+  $('bda-rows').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+}
+
+// Side profile canvas
+const prof = $('profile');
+const pctx = prof.getContext('2d');
+const profData = (() => {
+  const step = Math.max(1, Math.floor(N / 500));
+  const th = [], kv = [];
+  let maxR = defR * 1.1, maxA = 10;
+  for (let i = 0; i < N; i += step) {
+    const r = Math.hypot(P.threat[3 * i], P.threat[3 * i + 2]), a = P.threat[3 * i + 1];
+    th.push([T[i], r, a]); maxR = Math.max(maxR, r); maxA = Math.max(maxA, a);
+    if (launchIdx >= 0 && i >= launchIdx) kv.push([T[i], Math.hypot(P.kv[3 * i], P.kv[3 * i + 2]), P.kv[3 * i + 1]]);
+  }
+  return { th, kv, maxR: maxR * 1.05, maxA: maxA * 1.12 };
+})();
+function drawProfile(time, tp, ip) {
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  const w = prof.clientWidth, h = prof.clientHeight;
+  if (!w) return;
+  if (prof.width !== w * dpr) { prof.width = w * dpr; prof.height = h * dpr; }
+  const c = pctx;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const L = 26, B = 16, Rp = 4, Tp = 6;
+  const X = (r) => L + (r / profData.maxR) * (w - L - Rp);
+  const Y = (a) => h - B - (a / profData.maxA) * (h - B - Tp);
+  c.font = '500 10px "Geist Mono", monospace';
+  c.lineWidth = 1;
+  c.strokeStyle = 'rgba(214,228,240,0.06)';
+  c.fillStyle = COL.faint;
+  for (let r = 0; r <= profData.maxR; r += 10) { c.beginPath(); c.moveTo(X(r), Tp); c.lineTo(X(r), h - B); c.stroke(); c.fillText(r.toFixed(0), X(r) - 4, h - 3); }
+  for (let a = 0; a <= profData.maxA; a += 20) { c.beginPath(); c.moveTo(L, Y(a)); c.lineTo(w - Rp, Y(a)); c.stroke(); if (a) c.fillText(a.toFixed(0), 2, Y(a) + 3); }
+
+  // Defended area band on the ground axis
+  c.fillStyle = COL.safe; c.globalAlpha = 0.08;
+  c.fillRect(L, Tp, X(defR) - L, h - B - Tp);
+  c.globalAlpha = 0.55; c.strokeStyle = COL.safe; c.setLineDash([3, 3]);
+  c.beginPath(); c.moveTo(X(defR), Tp); c.lineTo(X(defR), h - B); c.stroke(); c.setLineDash([]);
+  c.globalAlpha = 1;
+
+  const path = (pts, col, upTo, width, alpha) => {
+    c.strokeStyle = col; c.lineWidth = width; c.globalAlpha = alpha; c.lineJoin = 'round'; c.beginPath();
+    let started = false;
+    for (const [t, r, a] of pts) { if (t > upTo) break; if (!started) { c.moveTo(X(r), Y(a)); started = true; } else c.lineTo(X(r), Y(a)); }
+    c.stroke(); c.globalAlpha = 1;
+  };
+  path(profData.th, COL.threat, Infinity, 1, 0.22);
+  path(profData.kv, COL.kv, Infinity, 1, 0.22);
+  path(profData.th, COL.threat, time, 1.75, 1);
+  path(profData.kv, COL.kv, time, 1.75, 1);
+  const dot = (x, y, col, r = 3.2) => { c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); };
+  if (killT != null && time >= killT) {
+    const x = X(Math.hypot(killPos.x, killPos.z)), y = Y(killPos.y);
+    c.globalAlpha = 0.25; dot(x, y, COL.safe, 8); c.globalAlpha = 1; dot(x, y, COL.safe, 4);
+  } else {
+    if (!(impactT != null && time >= impactT)) dot(X(Math.hypot(tp.x, tp.z)), Y(tp.y), COL.threat);
+    if (launchT != null && time >= launchT) dot(X(Math.hypot(ip.x, ip.z)), Y(ip.y), COL.kv);
+  }
+}
+
+// ============================================================================
+// ANALYSIS – synchronized figures, filter diagnostics and methods
+// ============================================================================
+// Series hues validated with the dataviz palette check on the dark chart surface
+const SER = { threat: '#e8664f', kv: '#4598cc', eng: '#d9a03a' };
+const PRM = D.params || {};
+const dtSim = PRM.dt ?? 0.02;
+const hyp = Math.hypot;
+const xMin = tStart, xMax = T[N - 1];
+
+const S = {};
+['altT', 'altI', 'spdT', 'spdI', 'sep', 'vc', 'los', 'gcmd', 'dv', 'zem', 'ex', 'ey', 'ez', 'sx', 'sy', 'sz', 'ev', 'svn', 'epos', 'eraw']
+  .forEach((k) => { S[k] = new Float32Array(N).fill(NaN); });
+{
+  let dvAcc = 0;
+  for (let i = 0; i < N; i++) {
+    const a = 3 * i, k = 6 * i, e = D.kfErr, sg = D.kfSig;
+    const tx = D.threat[a], ty = D.threat[a + 1], tz = D.threat[a + 2];
+    const tvx = D.threatVel[a], tvy = D.threatVel[a + 1], tvz = D.threatVel[a + 2];
+    S.altT[i] = tz / 1000;
+    S.spdT[i] = hyp(tvx, tvy, tvz);
+    S.ex[i] = e[k]; S.ey[i] = e[k + 1]; S.ez[i] = e[k + 2];
+    S.sx[i] = 3 * sg[k]; S.sy[i] = 3 * sg[k + 1]; S.sz[i] = 3 * sg[k + 2];
+    S.epos[i] = hyp(e[k], e[k + 1], e[k + 2]);
+    S.ev[i] = hyp(e[k + 3], e[k + 4], e[k + 5]);
+    S.svn[i] = 3 * hyp(sg[k + 3], sg[k + 4], sg[k + 5]);
+    // Logged truth is one step after the measurement, so step it back for the raw radar error
+    if (D.status[i] !== 2) S.eraw[i] = hyp(D.radar[a] - (tx - tvx * dtSim), D.radar[a + 1] - (ty - tvy * dtSim), D.radar[a + 2] - (tz - tvz * dtSim));
+    if (D.status[i] > 0) {
+      const ix = D.interceptor[a], iy = D.interceptor[a + 1], iz = D.interceptor[a + 2];
+      const ivx = D.interceptorVel[a], ivy = D.interceptorVel[a + 1], ivz = D.interceptorVel[a + 2];
+      S.altI[i] = iz / 1000;
+      S.spdI[i] = hyp(ivx, ivy, ivz);
+      const rx = tx - ix, ry = ty - iy, rz = tz - iz, vx = tvx - ivx, vy = tvy - ivy, vz = tvz - ivz;
+      const r = Math.max(hyp(rx, ry, rz), 1e-6), rv = rx * vx + ry * vy + rz * vz, vv = vx * vx + vy * vy + vz * vz;
+      S.sep[i] = r / 1000;
+      S.vc[i] = -rv / r;
+      S.los[i] = (1000 * hyp(ry * vz - rz * vy, rz * vx - rx * vz, rx * vy - ry * vx)) / (r * r);
+      S.gcmd[i] = D.g[i];
+      if (D.stage[i] === 2) dvAcc += D.g[i] * 9.81 * (i ? T[i] - T[i - 1] : dtSim);
+      S.dv[i] = dvAcc;
+      const tgo = vv > 1e-9 ? Math.max(0, -rv / vv) : 0;
+      S.zem[i] = hyp(rx + vx * tgo, ry + vy * tgo, rz + vz * tgo);
+    }
+  }
+}
+
+// Filter statistics after the initial transient (t >= 2 s)
+const kfStats = (() => {
+  let n = 0, sp = 0, sv = 0, sr = 0, nr = 0, inside = 0;
+  for (let i = 0; i < N; i++) {
+    if (T[i] < tStart + 2 || !Number.isFinite(S.epos[i])) continue;
+    n++; sp += S.epos[i] ** 2; sv += S.ev[i] ** 2;
+    if (Math.abs(S.ex[i]) <= S.sx[i] && Math.abs(S.ey[i]) <= S.sy[i] && Math.abs(S.ez[i]) <= S.sz[i]) inside++;
+    if (Number.isFinite(S.eraw[i])) { nr++; sr += S.eraw[i] ** 2; }
+  }
+  return n ? { pos: Math.sqrt(sp / n), vel: Math.sqrt(sv / n), raw: nr ? Math.sqrt(sr / nr) : NaN, inside: (100 * inside) / n, n } : null;
+})();
+
+// ---- figure engine (canvas 2D: static base layer + per-frame overlay) ----
+const PAD = { l: 46, r: 12, t: 12, b: 22 };
+const phaseMarks = [[launchT, 'Launch'], [burnT, 'Burnout'], [endEventT, killT != null ? 'Kill' : 'Impact']].filter(([t]) => t != null);
+const figures = [];
+let figCount = 0;
+
+function niceStep(range, count) {
+  const raw = range / count, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+}
+function linTicks(lo, hi, count) {
+  const st = niceStep(hi - lo || 1, count), out = [];
+  for (let v = Math.ceil(lo / st) * st; v <= hi + st * 1e-6; v += st) out.push(+v.toPrecision(12));
+  return out;
+}
+function logTicks(lo, hi) { const out = []; for (let e = Math.round(Math.log10(lo)); e <= Math.round(Math.log10(hi)); e++) out.push(10 ** e); return out; }
+function fmtTick(v) {
+  const a = Math.abs(v);
+  if (a === 0) return '0';
+  if (a >= 1e5 || a < 1e-3) return v.toExponential(0).replace('e+', 'e');
+  return String(+v.toPrecision(4));
+}
+function seg(c, x0, y0, x1, y1) { c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); }
+function valueAt(arr, time) {
+  const [i, fr] = locate(time);
+  const a = arr[i], b = arr[i + 1];
+  if (!Number.isFinite(a)) return Number.isFinite(b) && fr > 0.5 ? b : NaN;
+  if (!Number.isFinite(b)) return a;
+  return a + (b - a) * fr;
+}
+
+function figure(host, tab, spec) {
+  const no = ++figCount;
+  const legend = [];
+  if (spec.series.length > 1 || spec.band || spec.refs) {
+    spec.series.forEach((sr) => legend.push(`<span><i style="--c:${sr.color}"></i>${sr.label}</span>`));
+    if (spec.band) legend.push(`<span><i class="band" style="--c:${spec.band.color}"></i>${spec.band.label}</span>`);
+    (spec.refs || []).forEach((r) => legend.push(`<span><i class="dash" style="--c:${COL.muted}"></i>${r.label}</span>`));
+  }
+  const el = document.createElement('figure');
+  el.className = 'fig';
+  el.innerHTML =
+    `<div class="fig-head"><span class="fig-title">${spec.title}</span><span class="fig-unit">${spec.unit}${spec.log ? ' · log' : ''}</span>` +
+    `<span class="legend">${legend.join('')}</span></div>` +
+    `<div class="plot"><canvas class="base"></canvas><canvas class="ov"></canvas><div class="tip"></div></div>` +
+    `<figcaption><b>Fig. ${no}.</b> ${spec.caption}</figcaption>`;
+  host.appendChild(el);
+  const f = { spec, tab, el, base: el.querySelector('.base'), ov: el.querySelector('.ov'), tip: el.querySelector('.tip'), hover: null, size: '' };
+  const tAt = (e) => { const r = f.ov.getBoundingClientRect(); return f.xInv(e.clientX - r.left); };
+  f.ov.addEventListener('pointermove', (e) => { if (f.xInv) f.hover = tAt(e); });
+  f.ov.addEventListener('pointerleave', () => { f.hover = null; });
+  f.ov.addEventListener('click', (e) => { if (f.xInv) seek(tAt(e)); });
+  figures.push(f);
+  return f;
+}
+
+function layoutFig(f) {
+  const w = f.ov.clientWidth, h = f.ov.clientHeight;
+  if (!w || !h) return false;
+  const key = `${w}x${h}`;
+  if (f.size === key) return true;
+  f.size = key;
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  for (const cv of [f.base, f.ov]) { cv.width = w * dpr; cv.height = h * dpr; cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
+  const { spec } = f;
+  let lo = Infinity, hi = -Infinity;
+  const take = (v) => { if (!Number.isFinite(v) || (spec.log && v <= 0)) return; if (v < lo) lo = v; if (v > hi) hi = v; };
+  spec.series.forEach((sr) => sr.data.forEach(take));
+  if (spec.band) spec.band.hi.forEach((v) => { take(v); if (spec.band.symmetric) take(-v); });
+  (spec.refs || []).forEach((r) => take(r.y));
+  if (!Number.isFinite(lo)) { lo = spec.log ? 1 : 0; hi = spec.log ? 10 : 1; }
+  if (spec.log) {
+    hi = 10 ** Math.ceil(Math.log10(hi));
+    lo = Math.max(10 ** Math.floor(Math.log10(lo)), hi / 1e7);
+    if (hi <= lo) hi = lo * 10;
+  } else {
+    const pad = (hi - lo || Math.abs(hi) || 1) * 0.08;
+    lo = spec.yMin != null ? spec.yMin : lo - pad;
+    hi += pad;
+  }
+  const pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
+  Object.assign(f, { w, h, lo, hi, pw, ph });
+  f.X = (t) => PAD.l + ((t - xMin) / (xMax - xMin)) * pw;
+  f.xInv = (x) => THREE.MathUtils.clamp(xMin + ((x - PAD.l) / pw) * (xMax - xMin), xMin, xMax);
+  const l0 = Math.log10(lo), l1 = Math.log10(hi);
+  f.Y = spec.log ? (v) => PAD.t + (1 - (Math.log10(v) - l0) / (l1 - l0)) * ph : (v) => PAD.t + (1 - (v - lo) / (hi - lo)) * ph;
+  drawBase(f);
+  return true;
+}
+
+function drawSeries(c, f, data, color, width) {
+  const stride = Math.max(1, Math.floor(N / (f.pw * 1.5)));
+  c.strokeStyle = color; c.lineWidth = width; c.lineJoin = 'round'; c.lineCap = 'round';
+  c.beginPath();
+  let pen = false;
+  const put = (i) => {
+    const v = data[i];
+    if (!Number.isFinite(v) || (f.spec.log && v <= 0)) { pen = false; return; }
+    const x = f.X(T[i]), y = f.Y(v);
+    if (pen) c.lineTo(x, y); else { c.moveTo(x, y); pen = true; }
+  };
+  for (let i = 0; i < N; i += stride) put(i);
+  put(N - 1);
+  c.stroke();
+}
+
+function drawBase(f) {
+  const c = f.base.getContext('2d'), { spec, w, h } = f;
+  c.clearRect(0, 0, w, h);
+  c.font = '500 10px "Geist Mono", ui-monospace, monospace';
+  // horizontal grid + y ticks
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  (spec.log ? logTicks(f.lo, f.hi) : linTicks(f.lo, f.hi, 4)).forEach((v) => {
+    const y = f.Y(v);
+    if (y < PAD.t - 1 || y > h - PAD.b + 1) return;
+    c.strokeStyle = !spec.log && v === 0 ? 'rgba(214,228,240,0.2)' : 'rgba(214,228,240,0.06)';
+    c.lineWidth = 1;
+    seg(c, PAD.l, y, w - PAD.r, y);
+    c.fillStyle = COL.faint;
+    c.fillText(fmtTick(v), PAD.l - 7, y);
+  });
+  // x ticks
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  linTicks(xMin, xMax, Math.max(3, Math.floor(f.pw / 70))).forEach((t) => {
+    const x = f.X(t);
+    c.strokeStyle = 'rgba(214,228,240,0.04)';
+    seg(c, x, PAD.t, x, h - PAD.b);
+    c.fillStyle = COL.faint;
+    c.fillText(String(+t.toFixed(1)), x, h - PAD.b + 6);
+  });
+  c.strokeStyle = 'rgba(214,228,240,0.16)';
+  seg(c, PAD.l, h - PAD.b + 0.5, w - PAD.r, h - PAD.b + 0.5);
+
+  c.save();
+  c.beginPath(); c.rect(PAD.l, PAD.t - 2, f.pw, f.ph + 4); c.clip();
+  // phase markers
+  c.setLineDash([2, 3]); c.strokeStyle = 'rgba(214,228,240,0.25)'; c.lineWidth = 1;
+  c.textAlign = 'left'; c.textBaseline = 'top'; c.fillStyle = COL.faint;
+  phaseMarks.forEach(([t, label]) => { const x = f.X(t); seg(c, x, PAD.t, x, h - PAD.b); c.fillText(label, x + 3, PAD.t); });
+  c.setLineDash([]);
+  // uncertainty band
+  if (spec.band) {
+    const b = spec.band, stride = Math.max(1, Math.floor(N / (f.pw * 1.5)));
+    const idx = [];
+    for (let i = 0; i < N; i += stride) if (Number.isFinite(b.hi[i])) idx.push(i);
+    const lo = (i) => (b.symmetric ? -b.hi[i] : 0);
+    c.fillStyle = b.color; c.globalAlpha = 0.16;
+    c.beginPath();
+    idx.forEach((i, j) => (j ? c.lineTo(f.X(T[i]), f.Y(b.hi[i])) : c.moveTo(f.X(T[i]), f.Y(b.hi[i]))));
+    for (let j = idx.length - 1; j >= 0; j--) c.lineTo(f.X(T[idx[j]]), f.Y(Math.max(lo(idx[j]), spec.log ? f.lo : -Infinity)));
+    c.closePath(); c.fill();
+    c.globalAlpha = 0.55; c.strokeStyle = b.color; c.lineWidth = 1;
+    drawSeries(c, f, b.hi, b.color, 1);
+    if (b.symmetric) drawSeries(c, f, b.hi.map((v) => -v), b.color, 1);
+    c.globalAlpha = 1;
+  }
+  // reference lines, labelled directly
+  (spec.refs || []).forEach((r) => {
+    const y = f.Y(r.y);
+    if (y < PAD.t || y > h - PAD.b) return;
+    c.setLineDash([5, 4]); c.strokeStyle = COL.muted; c.globalAlpha = 0.8; c.lineWidth = 1;
+    seg(c, PAD.l, y, w - PAD.r, y);
+    c.setLineDash([]); c.globalAlpha = 1;
+    c.fillStyle = COL.muted; c.textAlign = 'right'; c.textBaseline = 'bottom';
+    c.fillText(r.label, w - PAD.r - 4, y - 3);
+  });
+  spec.series.forEach((sr) => drawSeries(c, f, sr.data, sr.color, spec.thin ? 1.25 : 2));
+  // direct labels for multi-series figures, placed where the series exist
+  if (spec.series.length > 1) {
+    c.font = '500 11px Geist, ui-sans-serif, sans-serif'; c.textBaseline = 'bottom';
+    spec.series.forEach((sr, j) => {
+      const finite = [];
+      for (let i = 0; i < N; i += 8) if (Number.isFinite(sr.data[i]) && !(spec.log && sr.data[i] <= 0)) finite.push(i);
+      if (!finite.length) return;
+      const i = finite[Math.floor(finite.length * (0.3 + 0.35 * j))] ?? finite[0];
+      const x = f.X(T[i]), y = f.Y(sr.data[i]);
+      c.fillStyle = COL.muted; c.textAlign = x > w - 90 ? 'right' : 'left';
+      c.fillText(sr.label, x + (c.textAlign === 'left' ? 6 : -6), y - 5);
+    });
+  }
+  c.restore();
+}
+
+function drawOverlay(f, time) {
+  if (!layoutFig(f)) return;
+  const c = f.ov.getContext('2d'), { spec, w, h } = f;
+  c.clearRect(0, 0, w, h);
+  const mark = (t, hover) => {
+    const x = f.X(t);
+    c.strokeStyle = hover ? 'rgba(214,228,240,0.5)' : COL.accent; c.lineWidth = 1;
+    c.setLineDash(hover ? [3, 3] : []);
+    seg(c, x, PAD.t, x, h - PAD.b);
+    c.setLineDash([]);
+    spec.series.forEach((sr) => {
+      const v = valueAt(sr.data, t);
+      if (!Number.isFinite(v) || (spec.log && v <= 0)) return;
+      const y = f.Y(v);
+      if (y < PAD.t || y > h - PAD.b) return;
+      c.fillStyle = '#0f141b'; c.beginPath(); c.arc(x, y, 5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = sr.color; c.beginPath(); c.arc(x, y, 3.2, 0, Math.PI * 2); c.fill();
+    });
+  };
+  mark(THREE.MathUtils.clamp(time, xMin, xMax), false);
+  if (f.hover != null) {
+    mark(f.hover, true);
+    const rows = [`<span>t = ${f.hover.toFixed(2)} s</span>`];
+    spec.series.forEach((sr) => {
+      const v = valueAt(sr.data, f.hover);
+      rows.push(`<span><i style="--c:${sr.color}"></i>${sr.label}: ${Number.isFinite(v) ? spec.fmt(v) : '—'}</span>`);
+    });
+    if (spec.band) {
+      const v = valueAt(spec.band.hi, f.hover);
+      rows.push(`<span><i style="--c:${spec.band.color}"></i>${spec.band.label}: ${Number.isFinite(v) ? (spec.band.symmetric ? '±' : '') + spec.fmt(v) : '—'}</span>`);
+    }
+    f.tip.innerHTML = rows.join('');
+    f.tip.style.display = 'block';
+    const x = f.X(f.hover), tw = f.tip.offsetWidth;
+    f.tip.style.left = `${x + 14 + tw > w ? x - tw - 14 : x + 14}px`;
+    f.tip.style.top = `${PAD.t + 4}px`;
+  } else f.tip.style.display = 'none';
+}
+
+// ---- figure definitions ----
+const fmtU = (unit, d = 1) => (v) => `${v.toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d })} ${unit}`;
+const fmtSig = (unit) => (v) => `${Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 1 ? v.toFixed(2) : v.toPrecision(3)} ${unit}`;
+let analysisBuilt = false;
+
+function figGrid(id) { const g = document.createElement('div'); g.className = 'figs'; $(id).appendChild(g); return g; }
+
+function buildAnalysis() {
+  if (analysisBuilt) return;
+  analysisBuilt = true;
+
+  const kin = figGrid('tab-kin');
+  figure(kin, 'kin', {
+    title: 'Altitude', unit: 'km', fmt: fmtU('km', 2), yMin: 0,
+    series: [{ label: 'Threat', color: SER.threat, data: S.altT }, { label: 'Interceptor', color: SER.kv, data: S.altI }],
+    caption: 'Height above the z = 0 ground plane for the threat and the interceptor (true states).',
+  });
+  figure(kin, 'kin', {
+    title: 'Speed', unit: 'm/s', fmt: fmtU('m/s', 0), yMin: 0,
+    series: [{ label: 'Threat', color: SER.threat, data: S.spdT }, { label: 'Interceptor', color: SER.kv, data: S.spdI }],
+    caption: 'Magnitude of the inertial velocity. The interceptor accelerates only during boost; afterwards gravity and drag slow it.',
+  });
+  figure(kin, 'kin', {
+    title: 'Separation', unit: 'km', fmt: fmtSig('km'), log: true,
+    series: [{ label: 'Separation', color: SER.eng, data: S.sep }],
+    refs: [{ y: (D.killRadius || 10) / 1000, label: `kill radius ${D.killRadius} m` }],
+    caption: 'Distance between interceptor and threat from launch onward, ‖r‖ with r = r<sub>T</sub> − r<sub>I</sub>.',
+  });
+  figure(kin, 'kin', {
+    title: 'Closing velocity', unit: 'm/s', fmt: fmtU('m/s', 0),
+    series: [{ label: 'Closing velocity', color: SER.eng, data: S.vc }],
+    caption: 'V<sub>c</sub> = −dr/dt = −(r·v)/‖r‖, with v the relative velocity. Positive while the two bodies approach.',
+  });
+
+  const gui = figGrid('tab-gui');
+  figure(gui, 'gui', {
+    title: 'Line-of-sight rate', unit: 'mrad/s', fmt: fmtSig('mrad/s'), yMin: 0,
+    series: [{ label: 'LOS rate', color: SER.kv, data: S.los }],
+    caption: '‖ω‖ = ‖r × v‖ / ‖r‖² from the true states. Proportional navigation commands acceleration to drive this rate to zero.',
+  });
+  figure(gui, 'gui', {
+    title: 'Commanded acceleration', unit: 'g', fmt: fmtU('g', 2), yMin: 0,
+    series: [{ label: 'Command', color: SER.kv, data: S.gcmd }],
+    refs: [{ y: D.maxG, label: `limit ${D.maxG} g` }],
+    caption: 'Guidance command ‖a<sub>c</sub>‖ after the acceleration limit, including the 1 g gravity bias. During boost only 10 % of it is applied.',
+  });
+  figure(gui, 'gui', {
+    title: 'Divert Δv used', unit: 'm/s', fmt: fmtU('m/s', 1), yMin: 0,
+    series: [{ label: 'Δv used', color: SER.kv, data: S.dv }],
+    refs: PRM.kv_divert_dv ? [{ y: PRM.kv_divert_dv, label: `budget ${PRM.kv_divert_dv} m/s` }] : undefined,
+    caption: PRM.kv_divert_dv
+      ? 'Cumulative ∫‖a<sub>c</sub>‖dt spent by the kill vehicle after burnout. Once the budget is reached the kill vehicle can no longer steer.'
+      : 'Cumulative ∫‖a<sub>c</sub>‖dt spent by the kill vehicle after burnout. This mode has no divert budget.',
+  });
+  figure(gui, 'gui', {
+    title: 'Zero-effort miss', unit: 'm', fmt: fmtSig('m'), log: true,
+    series: [{ label: 'ZEM', color: SER.eng, data: S.zem }],
+    refs: [{ y: D.killRadius || 10, label: `kill radius ${D.killRadius} m` }],
+    caption: 'Miss distance if neither body accelerated from this instant: ‖r + v·t<sub>go</sub>‖ with t<sub>go</sub> = −(r·v)/‖v‖². The intercept is assured once it stays below the kill radius.',
+  });
+
+  const kf = figGrid('tab-kf');
+  if (kfStats) {
+    const st = document.createElement('dl');
+    st.className = 'stats';
+    const red = kfStats.raw / kfStats.pos;
+    st.innerHTML = [
+      ['Position RMS error', `${kfStats.pos.toFixed(2)} m`, `3D, t ≥ 2 s, n = ${kfStats.n.toLocaleString('en-US')}`],
+      ['Velocity RMS error', `${kfStats.vel.toFixed(2)} m/s`, '3D, same samples'],
+      ['Noise reduction', `${red.toFixed(1)}×`, `raw radar ${kfStats.raw.toFixed(1)} m RMS → filtered ${kfStats.pos.toFixed(2)} m`],
+      ['3σ consistency', `${kfStats.inside.toFixed(1)} %`, 'samples inside ±3σ on all three axes; ≈ 99.2 % for a consistent filter'],
+    ].map(([k, v, n]) => `<div class="stat"><dt>${k}</dt><dd>${v}</dd><small>${n}</small></div>`).join('');
+    $('tab-kf').insertBefore(st, kf);
+  }
+  const axisFig = (label, err, sig) => figure(kf, 'kf', {
+    title: `Position error, ${label}`, unit: 'm', fmt: fmtSig('m'), thin: true,
+    series: [{ label: 'Error', color: SER.threat, data: err }],
+    band: { hi: sig, symmetric: true, color: SER.threat, label: '±3σ' },
+    caption: `Kalman estimate minus truth along ${label}, with the filter's ±3σ bound from √P.`,
+  });
+  axisFig('east (x)', S.ex, S.sx);
+  axisFig('north (y)', S.ey, S.sy);
+  axisFig('up (z)', S.ez, S.sz);
+  figure(kf, 'kf', {
+    title: 'Velocity error', unit: 'm/s', fmt: fmtSig('m/s'), thin: true, yMin: 0,
+    series: [{ label: '‖v̂ − v‖', color: SER.threat, data: S.ev }],
+    band: { hi: S.svn, symmetric: false, color: SER.threat, label: '3σ bound' },
+    caption: 'Magnitude of the velocity estimate error against the 3σ bound from the velocity block of P.',
+  });
+  const kfMag = figure(kf, 'kf', {
+    title: 'Filtered vs raw position error', unit: 'm', fmt: fmtSig('m'), log: true, thin: true,
+    series: [{ label: 'Kalman estimate', color: SER.threat, data: S.epos }, { label: 'Raw radar', color: SER.kv, data: S.eraw }],
+    caption: 'Magnitude of the position error of the raw radar measurements and of the filtered estimate.',
+  });
+  kfMag.el.style.gridColumn = '1 / -1';
+
+  buildMethods();
+}
+
+// ---- methods ----
+function tex(src, display = true) {
+  return window.katex ? window.katex.renderToString(src, { displayMode: display, throwOnError: false }) : `<code>${src}</code>`;
+}
+function fmtParam(v) {
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a < 1e-2) { const e = Math.floor(Math.log10(a)); return `${+(v / 10 ** e).toFixed(2)} × 10<sup>${e}</sup>`; }
+  return v.toLocaleString('en-US', { maximumSignificantDigits: 6 });
+}
+const SCRIPT_NAMES = { 'ENGINEERING MODE': 'THAAD Ultimlate Prototype.py', 'MAX-PERFORMANCE MODE': 'THAAD MAX_performance prototype.py' };
+
+function buildMethods() {
+  const p = PRM;
+  const gated = D.engageRule === 'PIP-GATED LAUNCH';
+  const PARAMS = [
+    ['dt', String.raw`\Delta t`, 'Integration time step', 's'],
+    ['g', 'g', 'Gravitational acceleration', 'm/s²'],
+    ['pos_noise', String.raw`\sigma_p`, 'Radar position noise, 1σ per axis', 'm'],
+    ['vel_noise', String.raw`\sigma_v`, 'Radar velocity noise, 1σ per axis', 'm/s'],
+    ['kf_q', 'q', 'Process-noise variance (Q = qI)', '—'],
+    ['kf_p0', 'p_0', 'Initial covariance (P₀ = p₀I)', '—'],
+    ['threat_drag', 'k_T', 'Threat drag coefficient', '1/m'],
+    ['boost_thrust', 'F_T', 'Boost thrust', 'N'],
+    ['boost_time', 't_b', 'Boost duration', 's'],
+    ['mass_wet', 'm_0', 'Launch mass', 'kg'],
+    ['mass_dry', 'm_b', 'Mass at burnout', 'kg'],
+    ['kv_mass', String.raw`m_{KV}`, 'Kill-vehicle mass', 'kg'],
+    ['booster_drag', 'k_B', 'Booster drag coefficient', 'kg/m'],
+    ['kv_drag', String.raw`k_{KV}`, 'Kill-vehicle drag coefficient', 'kg/m'],
+    ['pn_gain', 'N', 'Navigation constant', '—'],
+    ['max_g', String.raw`n_{max}`, 'Acceleration limit', 'g'],
+    ['kv_divert_dv', String.raw`\Delta v_{KV}`, 'Kill-vehicle divert budget', 'm/s'],
+    ['kill_radius', 'R_k', 'Kill radius', 'm'],
+    ['defended_radius', 'R_D', 'Defended radius', 'm'],
+    ['min_track_time', String.raw`t_{trk}`, 'Minimum track time before launch', 's'],
+    ['t_max', String.raw`t_{max}`, 'Base simulation window', 's'],
+  ].filter(([k]) => p[k] != null);
+
+  const script = SCRIPT_NAMES[D.mode] ?? 'THAAD Ultimlate Prototype.py';
+  const cmd = D.seed != null ? `python "${script}" ${D.seed}` : '';
+  const sections = [
+    ['Frame and integration', `
+      <p>Flat-Earth east–north–up frame (x east, y north, z up) in SI units, constant gravity. Both bodies are integrated with semi-implicit Euler at Δt = ${p.dt} s: velocity is updated first, then position with the new velocity.</p>`],
+    ['Threat dynamics', `
+      <p>Point mass under gravity and quadratic drag.</p>
+      <div class="eq">${tex(String.raw`\ddot{\mathbf r}_T = -g\,\hat{\mathbf z} - k_T\,\lVert\dot{\mathbf r}_T\rVert\,\dot{\mathbf r}_T`)}</div>`],
+    ['Interceptor dynamics', `
+      <p>Thrust F<sub>T</sub> acts along the guidance command during boost while mass drops linearly from m<sub>0</sub> to m<sub>b</sub>. After burnout the kill vehicle (mass m<sub>KV</sub>) steers with its divert thrusters.</p>
+      <div class="eq">${tex(String.raw`m\,\ddot{\mathbf r}_I = F_T\,\hat{\mathbf a}_c - m g\,\hat{\mathbf z} - k\,\lVert\dot{\mathbf r}_I\rVert\,\dot{\mathbf r}_I + \eta\, m\,\mathbf a_c,\qquad \eta = \begin{cases}0.1 & t < t_b\\ 1 & t \ge t_b\end{cases}`)}</div>`],
+    ['Guidance: proportional navigation', `
+      <p>Relative state from the Kalman estimate of the threat, r = r̂<sub>T</sub> − r<sub>I</sub> and v = v̂<sub>T</sub> − v<sub>I</sub>. The command includes a gravity bias and is capped at n<sub>max</sub>·g${p.kv_divert_dv ? '. The kill vehicle has a finite divert budget' : ''}.</p>
+      <div class="eq">${tex(String.raw`\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
+      ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}`],
+    ['Tracking: Kalman filter', `
+      <p>Six-state constant-velocity filter with a gravity bias in the prediction. The radar observes position and velocity directly (H = I) with independent Gaussian noise.</p>
+      <div class="eq">${tex(String.raw`\mathbf x = \begin{bmatrix}\mathbf p\\ \mathbf v\end{bmatrix},\quad F = \begin{bmatrix} I & \Delta t\, I\\ 0 & I\end{bmatrix},\quad R = \operatorname{diag}(\sigma_p^2 I,\ \sigma_v^2 I),\quad Q = q I`)}</div>
+      <div class="eq">${tex(String.raw`\mathbf x^- = F\mathbf x - g\,\Delta t\,\mathbf e_{v_z},\qquad P^- = F P F^\top + Q`)}</div>
+      <div class="eq">${tex(String.raw`K = P^-\!\left(P^- + R\right)^{-1},\qquad \mathbf x = \mathbf x^- + K(\mathbf z - \mathbf x^-),\qquad P = (I - K)P^-`)}</div>`],
+    ['Launch decision', gated ? `
+      <p>The predicted impact point (PIP) is the ballistic ground crossing from the current estimate, ignoring drag. The interceptor launches once the track is at least t<sub>trk</sub> old, the threat is descending and the PIP is inside the defended radius.</p>
+      <div class="eq">${tex(String.raw`t^\ast = \frac{v_z + \sqrt{v_z^2 + 2 g z}}{g},\qquad \mathrm{PIP} = (x + v_x t^\ast,\ y + v_y t^\ast),\qquad \text{launch if } \lVert\mathrm{PIP}\rVert \le R_D`)}</div>` : `
+      <p>This mode launches on the first descending track estimate after 3 s and does not gate on the predicted impact point. The PIP shown is for reference only.</p>`],
+    ['Kill assessment', `
+      <p>Each step both bodies move along straight segments; the closest point of approach inside the step decides the kill.</p>
+      <div class="eq">${tex(String.raw`t^\ast = \operatorname{clamp}\!\left(-\frac{\Delta\mathbf p\cdot\Delta\mathbf v}{\lVert\Delta\mathbf v\rVert^2},\ 0,\ \Delta t\right),\qquad \text{kill if } \lVert\Delta\mathbf p + \Delta\mathbf v\, t^\ast\rVert < R_k`)}</div>`],
+    ['Parameters used in this run', `
+      <table class="params"><thead><tr><th>Symbol</th><th>Quantity</th><th style="text-align:right">Value</th><th>Unit</th></tr></thead><tbody>
+      ${PARAMS.map(([k, sym, desc, unit]) => `<tr><td class="sym">${tex(sym, false)}</td><td>${desc}</td><td class="v">${fmtParam(p[k])}</td><td class="u">${unit}</td></tr>`).join('')}
+      </tbody></table>`],
+    ['Run', `
+      <p>${MODE_NAMES[D.mode] ?? D.mode} mode · outcome <code>${D.outcome}</code> · ${N.toLocaleString('en-US')} frames over ${xMax.toFixed(2)} s${D.seed != null ? ` · seed <code>${D.seed}</code>` : ''}.</p>
+      ${cmd ? `<p>Reproduce this exact scenario from the project folder:</p><div class="cmd"><code id="repro">${cmd}</code><button id="copy-cmd">Copy</button></div>` : '<p>This replay was generated without a recorded seed.</p>'}`],
+    ['Assumptions and limits', `
+      <ul class="assume">
+        <li>Flat Earth, constant gravity, no Earth rotation.</li>
+        <li>Quadratic drag with constant coefficients: no atmosphere model or Mach dependence.</li>
+        <li>The radar measures Cartesian position and velocity directly; real sensors measure range and angles.</li>
+        <li>Point-mass vehicles with no attitude dynamics, actuator lag or seeker model.</li>
+        <li>Analysis quantities (LOS rate, closing velocity, ZEM) are computed from the true states; guidance itself uses the Kalman estimate.</li>
+        <li>Parameters are illustrative, not data for any real system.</li>
+      </ul>`],
+  ];
+  $('tab-methods').innerHTML = `<div class="methods">${sections.map(([h, body], i) => `<section><h3><span>${String(i + 1).padStart(2, '0')}</span>${h}</h3>${body}</section>`).join('')}</div>`;
+  const copy = $('copy-cmd');
+  if (copy) copy.onclick = () => {
+    const done = () => toast('Command copied');
+    if (navigator.clipboard) navigator.clipboard.writeText(cmd).then(done, () => toast('Copy failed: select the command and copy it'));
+    else toast('Copy failed: select the command and copy it');
+  };
+}
+
+function exportCsv() {
+  const cols = ['t_s', 'status', 'stage',
+    'threat_x_m', 'threat_y_m', 'threat_z_m', 'threat_vx_mps', 'threat_vy_mps', 'threat_vz_mps',
+    'int_x_m', 'int_y_m', 'int_z_m', 'int_vx_mps', 'int_vy_mps', 'int_vz_mps',
+    'est_x_m', 'est_y_m', 'est_z_m', 'radar_x_m', 'radar_y_m', 'radar_z_m',
+    'kf_err_x_m', 'kf_err_y_m', 'kf_err_z_m', 'kf_err_vx_mps', 'kf_err_vy_mps', 'kf_err_vz_mps',
+    'kf_sigma_x_m', 'kf_sigma_y_m', 'kf_sigma_z_m', 'kf_sigma_vx_mps', 'kf_sigma_vy_mps', 'kf_sigma_vz_mps',
+    'accel_cmd_g', 'separation_m', 'closing_velocity_mps', 'los_rate_mradps', 'zero_effort_miss_m', 'divert_dv_mps'];
+  const STATUS = ['SEARCH', 'FLYING', 'HIT'], STAGE = ['IDLE', 'BOOST', 'KV_COAST'];
+  const num = (v, d) => (Number.isFinite(v) ? +v.toFixed(d) : '');
+  const v3 = (arr, i) => [arr[3 * i], arr[3 * i + 1], arr[3 * i + 2]];
+  const lines = [cols.join(',')];
+  for (let i = 0; i < N; i++) {
+    lines.push([
+      T[i].toFixed(3), STATUS[D.status[i]], STAGE[D.stage[i]],
+      ...v3(D.threat, i), ...v3(D.threatVel, i), ...v3(D.interceptor, i), ...v3(D.interceptorVel, i),
+      ...v3(D.track, i), ...v3(D.radar, i),
+      ...D.kfErr.slice(6 * i, 6 * i + 6), ...D.kfSig.slice(6 * i, 6 * i + 6),
+      D.g[i], num(S.sep[i] * 1000, 2), num(S.vc[i], 2), num(S.los[i], 4), num(S.zem[i], 3), num(S.dv[i], 2),
+    ].join(','));
+  }
+  const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `thaad_${(MODE_NAMES[D.mode] ?? 'replay').toLowerCase().replace(/\s+/g, '_')}_${D.seed != null ? `seed${D.seed}` : 'replay'}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`Exported ${N.toLocaleString('en-US')} rows × ${cols.length} columns`);
+}
+
+// ---- scale bar and axis triad (scientific style) ----
+const triad = $('triad');
+const triadCtx = triad.getContext('2d');
+const AXES = [['E', new THREE.Vector3(1, 0, 0)], ['N', new THREE.Vector3(0, 0, -1)], ['U', new THREE.Vector3(0, 1, 0)]];
+const qInv = new THREE.Quaternion();
+const SCALES = [];
+for (let e = -2; e <= 3; e++) for (const m of [1, 2, 5]) SCALES.push(m * 10 ** e);
+function drawRefs() {
+  const d = camera.position.distanceTo(camLookTarget);
+  const pxPerKm = window.innerHeight / (2 * d * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  const L = SCALES.find((v) => v * pxPerKm >= 50) ?? SCALES[SCALES.length - 1];
+  $('sb-bar').style.width = `${Math.round(L * pxPerKm)}px`;
+  $('sb-label').textContent = L >= 1 ? `${L} km` : `${Math.round(L * 1000)} m`;
+
+  const dpr = Math.min(window.devicePixelRatio, 2), W = 36, C = W / 2;
+  if (triad.width !== W * dpr) { triad.width = triad.height = W * dpr; }
+  const c = triadCtx;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, W, W);
+  qInv.copy(camera.quaternion).invert();
+  const pts = AXES.map(([n, v]) => [n, v.clone().applyQuaternion(qInv)]).sort((a, b) => a[1].z - b[1].z);
+  c.font = '600 9px "Geist Mono", monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  pts.forEach(([n, v]) => {
+    const x = C + v.x * 10, y = C - v.y * 10;
+    c.globalAlpha = 0.45 + 0.55 * THREE.MathUtils.clamp((v.z + 1) / 2, 0, 1);
+    c.strokeStyle = n === 'U' ? '#e6ebf0' : '#8d99a6'; c.lineWidth = 1.5;
+    seg(c, C, C, x, y);
+    c.fillStyle = c.strokeStyle;
+    c.fillText(n, C + v.x * 15, C - v.y * 15);
+  });
+  c.globalAlpha = 1;
+}
+
+// ============================================================================
+// PLAYBACK STATE + CONTROLS
+// ============================================================================
+const SPEEDS = [0.25, 1, 2, 5, 10, 20];
+let speed = 5;
+let simTime = tStart;
+let playing = true;
+let scrubbing = false;
+let camMode = 'cinematic';
+const layers = { radar: true, track: true, los: true, labels: true, slowmo: true };
+let bdaDismissed = false;
+let bdaShown = false;
+let snapCamera = true;
+
+// Optional deep link, e.g. replay.html#t=57&cam=threat&speed=1&paused&focus
+const hashArgs = new URLSearchParams(location.hash.slice(1));
+
+const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M5 3.2v9.6a.7.7 0 0 0 1.06.6l7.4-4.8a.7.7 0 0 0 0-1.2l-7.4-4.8A.7.7 0 0 0 5 3.2z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 16 16"><rect x="4" y="3" width="2.8" height="10" rx=".8" fill="currentColor"/><rect x="9.2" y="3" width="2.8" height="10" rx=".8" fill="currentColor"/></svg>';
+
+let toastTimer = 0;
+function toast(html, ms = 1600) {
+  const el = $('toast');
+  el.innerHTML = html;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function seek(t) { simTime = THREE.MathUtils.clamp(t, tStart, tEnd); bdaDismissed = false; }
+
+const speedsEl = $('speeds');
+SPEEDS.forEach((s) => {
+  const b = document.createElement('button');
+  b.textContent = `${s}×`; b.dataset.speed = s; b.title = `Playback speed ${s}×`;
+  b.onclick = () => setSpeed(s);
+  speedsEl.appendChild(b);
+});
+function setSpeed(s) {
+  speed = s;
+  speedsEl.querySelectorAll('button').forEach((b) => {
+    const on = +b.dataset.speed === s;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on);
+  });
+}
+setSpeed(hashArgs.has('speed') ? +hashArgs.get('speed') : speed);
+if (hashArgs.has('t')) simTime = THREE.MathUtils.clamp(+hashArgs.get('t'), tStart, tEnd);
+
+function setPlaying(p) {
+  if (p && simTime >= tEnd - 1e-6) { simTime = tStart; bdaDismissed = false; }
+  playing = p;
+  $('play').innerHTML = p ? ICON_PAUSE : ICON_PLAY;
+  $('play').setAttribute('aria-label', p ? 'Pause' : 'Play');
+}
+setPlaying(true);
+$('play').onclick = () => setPlaying(!playing);
+$('restart').onclick = () => { seek(tStart); setPlaying(true); };
+$('bda-replay').onclick = () => { seek(tStart); setPlaying(true); };
+$('bda-close').onclick = () => { bdaDismissed = true; };
+
+const tl = $('timeline');
+tl.min = tStart; tl.max = tEnd;
+tl.addEventListener('pointerdown', () => { scrubbing = true; });
+window.addEventListener('pointerup', () => { scrubbing = false; });
+tl.addEventListener('input', () => seek(+tl.value));
+tl.addEventListener('pointermove', (e) => {
+  const r = tl.getBoundingClientRect();
+  const f = THREE.MathUtils.clamp((e.clientX - r.left) / r.width, 0, 1);
+  const tip = $('scrub-tip');
+  tip.style.left = `${f * 100}%`;
+  tip.textContent = `T+${(tStart + f * (tEnd - tStart)).toFixed(1)} s`;
+});
+
+const CAM_NAMES = { cinematic: 'Cinematic', orbit: 'Free orbit', threat: 'Chase threat', kv: 'Chase interceptor', top: 'Top-down' };
+const CAM_KEYS = { cinematic: 'C', orbit: 'O', threat: 'T', kv: 'I', top: 'V' };
+const camLookTarget = new THREE.Vector3();
+// Free orbit can follow a moving vehicle, so you can spin around it while it flies
+let orbitFollow = null;        // 'threat' | 'kv' | null
+let followFresh = false;
+const followPos = new THREE.Vector3();
+function setCam(m, quiet = false, follow = null) {
+  camMode = m;
+  orbitFollow = m === 'orbit' ? follow : null;
+  followFresh = true;
+  document.querySelectorAll('#cam-btns button').forEach((b) => {
+    const on = b.dataset.cam === m;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on);
+  });
+  controls.enabled = m === 'orbit';
+  if (m === 'orbit') controls.target.copy(camLookTarget);
+  if (!quiet) toast(`${CAM_NAMES[m]} camera${m === 'orbit' ? ' — drag to rotate, scroll to zoom, right-drag to pan' : ''} <kbd>${CAM_KEYS[m]}</kbd>`);
+}
+
+// Grabbing the scene in any directed view hands the camera to the user.
+// Capture phase, so OrbitControls (listening on the same element) is already
+// enabled when it sees this same pointerdown / wheel event.
+const VEHICLE_NAMES = { threat: 'the threat', kv: 'the interceptor' };
+function takeOver(follow) {
+  setCam('orbit', true, follow);
+  toast(`Free orbit${follow ? ` around ${VEHICLE_NAMES[follow]}` : ''} · <kbd>C</kbd> returns to cinematic`, 2600);
+}
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (camMode === 'orbit' || e.button > 2) return;
+  takeOver(camMode === 'threat' || camMode === 'kv' ? camMode : null);
+}, { capture: true });
+renderer.domElement.addEventListener('wheel', () => {
+  if (camMode === 'cinematic' || camMode === 'top') takeOver(null);
+}, { capture: true, passive: true });
+document.querySelectorAll('#cam-btns button').forEach((b) => { b.onclick = () => setCam(b.dataset.cam); });
+
+const LAYER_NAMES = { radar: 'Radar returns', track: 'Kalman track', los: 'Line of sight', labels: 'Labels', slowmo: 'Slow motion at intercept' };
+function syncLayerButtons() {
+  document.querySelectorAll('#layer-btns button').forEach((b) => {
+    const on = layers[b.dataset.layer];
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on);
+  });
+}
+function toggleLayer(k) {
+  layers[k] = !layers[k];
+  syncLayerButtons();
+  toast(`${LAYER_NAMES[k]} ${layers[k] ? 'on' : 'off'}`);
+}
+document.querySelectorAll('#layer-btns button').forEach((b) => { b.onclick = () => toggleLayer(b.dataset.layer); });
+syncLayerButtons();
+
+const layersBtn = $('layers-btn'), layersMenu = $('layer-btns');
+function setMenu(open) {
+  layersMenu.classList.toggle('open', open);
+  layersBtn.setAttribute('aria-expanded', open);
+  layersBtn.classList.toggle('on-toggle', open);
+}
+layersBtn.onclick = (e) => { e.stopPropagation(); setMenu(!layersMenu.classList.contains('open')); };
+layersMenu.addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => setMenu(false));
+
+function setFocus(on) {
+  document.body.classList.toggle('focus', on);
+  $('focus-btn').classList.toggle('on-toggle', on);
+  $('focus-btn').setAttribute('aria-pressed', on);
+}
+$('focus-btn').onclick = () => setFocus(!document.body.classList.contains('focus'));
+if (hashArgs.has('focus')) setFocus(true);
+
+const help = $('help');
+function setHelp(open) { help.hidden = !open; if (open) $('help-close').focus(); }
+$('help-btn').onclick = () => setHelp(help.hidden);
+$('help-close').onclick = () => setHelp(false);
+
+let chaseDist = 0.5;
+renderer.domElement.addEventListener('wheel', (e) => {
+  if (camMode === 'threat' || camMode === 'kv') {
+    chaseDist = THREE.MathUtils.clamp(chaseDist * Math.exp(e.deltaY * 0.0015), 0.08, 40);
+    e.preventDefault();
+  }
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'escape') { setHelp(false); setMenu(false); return; }
+  // Let a focused button handle its own activation keys
+  if (e.target.tagName === 'BUTTON' && (k === ' ' || k === 'enter')) return;
+  if (e.target.tagName === 'INPUT' && k !== ' ') return;
+  if (k === '?') setHelp(help.hidden);
+  else if (k === ' ') { setPlaying(!playing); e.preventDefault(); }
+  else if (k === 'arrowright') seek(simTime + (e.shiftKey ? 5 : 1));
+  else if (k === 'arrowleft') seek(simTime - (e.shiftKey ? 5 : 1));
+  else if (k === 'home') seek(tStart);
+  else if (k === 'end') seek(tEnd);
+  else if (k === 'f') setFocus(!document.body.classList.contains('focus'));
+  else if (k === 'a') setAnalysis(!analysisOpen);
+  else if (k === 'g') setStyle(!sciStyle);
+  else if (k === 'c') setCam('cinematic');
+  else if (k === 'o') setCam('orbit');
+  else if (k === 't') setCam('threat');
+  else if (k === 'i') setCam('kv');
+  else if (k === 'v') setCam('top');
+  else if (k === 'r') toggleLayer('radar');
+  else if (k === 'k') toggleLayer('track');
+  else if (k === 'l') toggleLayer('los');
+  else if (k === 'h') toggleLayer('labels');
+  else if (k === 'm') toggleLayer('slowmo');
+  else if (k >= '1' && k <= '6') { setSpeed(SPEEDS[+k - 1]); toast(`Playback speed ${SPEEDS[+k - 1]}×`); }
+});
+
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.setSize(w, h); composer.setSize(w, h); labelRenderer.setSize(w, h);
+});
+
+// Rendering style: scientific (default) or cinematic
+let sciStyle = true;
+function setStyle(sci, quiet = false) {
+  sciStyle = sci;
+  document.body.classList.toggle('sci', sci);
+  bloom.strength = sci ? 0.35 : 0.85;
+  clouds.visible = !sci;
+  tubeMeshes.forEach((m) => { m.visible = !sci; });
+  trailUniforms.forEach((u, i) => { u.uMin.value = sci ? Math.max(trailMinDefaults[i], 0.55) : trailMinDefaults[i]; });
+  terrainMat.uniforms.uSweepOn.value = sci ? 0 : 1;
+  const b = $('style-btn');
+  b.textContent = sci ? 'Scientific' : 'Cinematic';
+  b.setAttribute('aria-pressed', sci);
+  if (!quiet) toast(`${sci ? 'Scientific' : 'Cinematic'} style <kbd>G</kbd>`);
+}
+$('style-btn').onclick = () => setStyle(!sciStyle);
+setStyle(hashArgs.get('style') !== 'cinematic', true);
+
+// Analysis drawer
+let analysisOpen = false;
+let analysisTab = 'kin';
+function setAnalysisTab(tab) {
+  analysisTab = tab;
+  document.querySelectorAll('#analysis .tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  ['kin', 'gui', 'kf', 'methods'].forEach((t) => { $(`tab-${t}`).hidden = t !== tab; });
+  $('analysis-intro').hidden = tab === 'methods';
+}
+function setAnalysis(open) {
+  analysisOpen = open;
+  if (open) buildAnalysis();
+  document.body.classList.toggle('analysis', open);
+  $('analysis-btn').classList.toggle('on-toggle', open);
+  $('analysis-btn').setAttribute('aria-pressed', open);
+}
+document.querySelectorAll('#analysis .tabs button').forEach((b) => { b.onclick = () => setAnalysisTab(b.dataset.tab); });
+$('analysis-btn').onclick = () => setAnalysis(!analysisOpen);
+$('analysis-close').onclick = () => setAnalysis(false);
+$('csv-btn').onclick = exportCsv;
+if (hashArgs.has('analysis')) {
+  setAnalysis(true);
+  if (['kin', 'gui', 'kf', 'methods'].includes(hashArgs.get('tab'))) setAnalysisTab(hashArgs.get('tab'));
+}
+
+// Slow down around the decisive moment so it is watchable
+function slowFactor(time) {
+  if (!layers.slowmo || endEventT == null) return 1;
+  const slow = killT != null ? 0.1 : 0.3;
+  const a = Math.abs(time - endEventT);
+  if (a > 2.5) return 1;
+  if (a < 0.8) return slow;
+  return THREE.MathUtils.lerp(slow, 1, (a - 0.8) / 1.7);
+}
+
+// ============================================================================
+// CAMERA DIRECTOR
+// ============================================================================
+const UP = new THREE.Vector3(0, 1, 0);
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3();
+const desiredPos = new THREE.Vector3(), desiredTarget = new THREE.Vector3();
+
+// Establishing side direction: perpendicular to the threat's ground track
+const trackDir = new THREE.Vector3(threatStart.x, 0, threatStart.z).normalize();
+const sideDir = new THREE.Vector3(-trackDir.z, 0, trackDir.x);
+
+function shot(state) {
+  const { time, tp, ip, tv, launched, stage, sep, killed, impacted } = state;
+  if (camMode === 'top') {
+    tmpA.copy(tp).multiplyScalar(0.5).setY(0);
+    desiredTarget.copy(tmpA);
+    desiredPos.set(tmpA.x, Math.max(90, threatStart.length() * 1.6), tmpA.z + 0.01);
+    return;
+  }
+  const focus = killed ? killPos : impacted ? impactPos : null;
+  if (focus) {
+    // after the engagement every view (except top-down) orbits the aftermath
+    const ang = realClock.t * 0.07;
+    const r = killed ? 9 : 7;
+    desiredPos.set(focus.x + Math.cos(ang) * r, focus.y + r * 0.35 + 0.5, focus.z + Math.sin(ang) * r);
+    desiredTarget.copy(focus);
+    return;
+  }
+  if (camMode === 'threat') {
+    const vdir = tmpA.copy(tv).normalize();
+    if (vdir.lengthSq() < 0.5) vdir.set(0, -1, 0);
+    desiredPos.copy(tp).addScaledVector(vdir, -chaseDist).addScaledVector(UP, chaseDist * 0.35).addScaledVector(sideDir, chaseDist * 0.2);
+    desiredTarget.copy(tp).addScaledVector(vdir, chaseDist * 0.6);
+    return;
+  }
+  if (camMode === 'kv') {
+    if (!launched) {
+      desiredPos.copy(sideDir).multiplyScalar(0.3).setY(0.08);
+      desiredTarget.copy(tp);
+      return;
+    }
+    const los = tmpA.copy(tp).sub(ip).normalize();
+    desiredPos.copy(ip).addScaledVector(los, -chaseDist).addScaledVector(UP, chaseDist * 0.25);
+    desiredTarget.copy(ip).addScaledVector(los, chaseDist * 4);
+    return;
+  }
+  // cinematic
+  if (!launched) {
+    const mid = tmpA.copy(tp).multiplyScalar(0.5);
+    const span = Math.max(tp.length(), 20);
+    desiredPos.copy(mid).addScaledVector(sideDir, span * 1.25).addScaledVector(UP, span * 0.1).addScaledVector(trackDir, span * 0.25);
+    desiredPos.y = Math.max(desiredPos.y, 3);
+    desiredTarget.copy(mid);
+    return;
+  }
+  if (stage === 1) {
+    desiredPos.copy(sideDir).multiplyScalar(5).addScaledVector(trackDir, -2).setY(1.2);
+    desiredPos.y += ip.y * 0.4;
+    desiredTarget.copy(ip);
+    return;
+  }
+  const ttg = state.ttg;
+  if (sep > 6 && !(ttg < 2.5)) {
+    const mid = tmpA.copy(tp).add(ip).multiplyScalar(0.5);
+    const los = tmpB.copy(tp).sub(ip).normalize();
+    const side = tmpC.crossVectors(los, UP);
+    if (side.lengthSq() < 1e-4) side.copy(sideDir); else side.normalize();
+    const dist = sep * 0.95 + 6;
+    desiredPos.copy(mid).addScaledVector(side, dist).addScaledVector(UP, dist * 0.18);
+    desiredTarget.copy(mid);
+    return;
+  }
+  // terminal: over the kill vehicle's shoulder, looking at the threat
+  const los = tmpA.copy(tp).sub(ip).normalize();
+  const side = tmpB.crossVectors(los, UP);
+  if (side.lengthSq() < 1e-4) side.copy(sideDir); else side.normalize();
+  desiredPos.copy(ip).addScaledVector(los, -0.8).addScaledVector(side, 0.7).addScaledVector(UP, 0.25);
+  desiredTarget.copy(tp);
+}
+
+// Initial framing
+{
+  const st = { time: tStart, tp: threatStart.clone(), ip: new THREE.Vector3(), tv: new THREE.Vector3(), launched: false, stage: 0, sep: 0, killed: false, impacted: false, ttg: Infinity };
+  shot(st);
+  camera.position.copy(desiredPos);
+  camLookTarget.copy(desiredTarget);
+  camera.lookAt(camLookTarget);
+  controls.target.copy(camLookTarget);
+}
+setCam(['cinematic', 'orbit', 'threat', 'kv', 'top'].includes(hashArgs.get('cam')) ? hashArgs.get('cam') : 'cinematic', true);
+if (hashArgs.has('paused')) setPlaying(false);
+else setTimeout(() => toast('Press <kbd>?</kbd> for shortcuts · <kbd>F</kbd> hides the panels', 4500), 1200);
+
+// ============================================================================
+// FRAME UPDATE
+// ============================================================================
+const tp = new THREE.Vector3(), ip = new THREE.Vector3(), tv = new THREE.Vector3(), iv = new THREE.Vector3();
+const tmpProj = new THREE.Vector3();
+
+// Keep vehicle labels on screen: flip them to the other side near the edges
+function placeLabel(lbl, pos, preferLeft) {
+  tmpProj.copy(pos).project(camera);
+  const x = (tmpProj.x * 0.5 + 0.5) * window.innerWidth;
+  let left = preferLeft;
+  if (x < 240) left = false;
+  else if (x > window.innerWidth - 240) left = true;
+  lbl.element.classList.toggle('left', left);
+}
+
+// Fade 3D labels while they sit under a HUD panel instead of drawing over or behind it
+const SIDE_PANELS = ['brand', 'bda', 'events', 'profilebox'].map((id) => $(id)).concat([...document.querySelectorAll('#telemetry .inst')]);
+const FIXED_PANELS = ['mission', 'transport', 'analysis'].map((id) => $(id));
+let sceneLabels = null;
+function fadeLabelsUnderPanels() {
+  sceneLabels ??= [lblThreat, lblKV, lblBattery, lblPip, lblKill, lblImpact, ...gridLabels];
+  const panels = document.body.classList.contains('focus') ? FIXED_PANELS : FIXED_PANELS.concat(SIDE_PANELS);
+  const rects = panels.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
+  sceneLabels.forEach((o) => {
+    if (!o.visible) return;
+    const r = o.userData.inner.getBoundingClientRect();
+    const covered = rects.some((p) => r.left < p.right && r.right > p.left && r.top < p.bottom && r.bottom > p.top);
+    o.element.style.opacity = covered ? '0' : '';
+  });
+}
+const tmpLook = new THREE.Vector3();
+let lastEventCount = -1;
+
+function update(time, dtReal) {
+  realClock.t += dtReal;
+  const [fi] = locate(time);
+  const stage = D.stage[Math.min(fi + 1, N - 1)];
+  sample(P.threat, time, tp);
+  sample(P.kv, time, ip);
+  velocity(P.threat, time, tv);
+  velocity(P.kv, time, iv);
+  const launched = launchT != null && time >= launchT;
+  const killed = killT != null && time >= killT;
+  const impacted = impactT != null && time >= impactT;
+  const sep = launched ? tp.distanceTo(ip) : tp.length();
+  const closing = launched ? -tmpA.copy(tp).sub(ip).normalize().dot(tmpB.copy(tv).sub(iv)) : 0;
+  const ttg = launched && closing > 0 ? sep / closing : Infinity;
+  // After terminal homing, an opening range means the kill vehicle has passed the threat
+  const missed = launched && !killed && terminalT != null && time >= terminalT && closing < 0;
+
+  // Trails & layers
+  trailUniforms.forEach((u) => { u.uNow.value = time; });
+  trackTrail.visible = layers.track;
+  radarPts.visible = layers.radar;
+  radarUniforms.uNow.value = Math.min(time, killT ?? Infinity);
+
+  // Threat
+  const threatAlive = !killed && !impacted;
+  threatObj.visible = threatAlive;
+  threatObj.position.copy(tp);
+  if (tv.lengthSq() > 1e-8) threatObj.userData.model.lookAt(tmpLook.copy(tp).add(tv));
+  {
+    const heat = threatObj.userData.heat;
+    const spd = tv.length();
+    heat.material.opacity = THREE.MathUtils.clamp((spd - 1.2) * 0.9, 0.15, 1) * (0.85 + Math.random() * 0.15);
+  }
+
+  // Interceptor
+  const kvAlive = !killed;
+  kvObj.visible = kvAlive;
+  kvObj.position.copy(ip);
+  const ud = kvObj.userData;
+  if (launched) {
+    if (iv.lengthSq() > 1e-8) ud.model.lookAt(tmpLook.copy(ip).add(iv));
+  } else {
+    ud.model.lookAt(tmpLook.set(0.2, 1, 0).add(ip));
+  }
+  const boosting = launched && stage === 1;
+  ud.booster.visible = !launched || stage !== 2;
+  ud.flame.visible = boosting;
+  ud.plume.visible = boosting;
+  if (boosting) {
+    const f = 0.85 + Math.random() * 0.3;
+    ud.flame.scale.setScalar(0.03 * f);
+    ud.plume.scale.setScalar(0.08 * (0.9 + Math.random() * 0.2));
+  }
+  const g = launched ? (D.g[Math.min(fi + 1, N - 1)] || 0) : 0;
+  ud.divert.visible = launched && stage === 2 && g > 1.5 && Math.random() > 0.35;
+  ud.far.material.color.set(boosting ? 0xf2b45c : 0x9ccfe8);
+  ud.far.scale.setScalar(launched ? (boosting ? 0.04 : 0.028) : 0.012);
+
+  // Spent booster
+  if (burnT != null && time >= burnT && time < burnT + 30) {
+    const a = time - burnT, k = 0.06;
+    const sb = spentBooster;
+    sb.visible = true;
+    sb.position.copy(sb.userData.p0).addScaledVector(sb.userData.v0, (1 - Math.exp(-k * a)) / k);
+    sb.position.y -= 0.5 * G_KM * a * a;
+    if (sb.position.y < 0) sb.visible = false;
+    sb.userData.model.rotation.set(a * 1.3, a * 0.7, 0);
+    sb.userData.ember.material.opacity = Math.max(0, 0.8 - a / 12);
+  } else spentBooster.visible = false;
+
+  // Explosions
+  if (killFx) killFx.update(time - killT);
+  if (impactFx) impactFx.update(time - impactT);
+
+  // Scientific style swaps the effects for exact markers and reference geometry
+  if (sciStyle) {
+    if (killFx) killFx.group.visible = false;
+    if (impactFx) impactFx.group.visible = false;
+  }
+  killMarker.visible = sciStyle && killed;
+  impactMarker.visible = sciStyle && impacted;
+  dropT.visible = sciStyle && threatAlive;
+  if (dropT.visible) setDrop(dropT, tp);
+  dropI.visible = sciStyle && launched && kvAlive;
+  if (dropI.visible) setDrop(dropI, ip);
+  refGeo.visible = sciStyle;
+
+  // LOS + radar beam
+  losLine.visible = layers.los && launched && !killed;
+  if (losLine.visible) setLine(losLine, ip, tp);
+  beamLine.visible = layers.los && threatAlive;
+  if (beamLine.visible) setLine(beamLine, tmpC.set(0, 0.05, 0), tp);
+
+  // Terrain uniforms
+  terrainMat.uniforms.uSweep.value = (realClock.t * 1.4) % (Math.PI * 2);
+  terrainMat.uniforms.uReal.value = realClock.t;
+  cloudMat.uniforms.uTime.value = time;
+  terrainMat.uniforms.uPipOn.value = pipPos && launched ? 1 : 0;
+  domeMat.uniforms.uScan.value = (realClock.t * 0.12) % 1;
+  // Seen from inside, the dome would wash out the whole frame
+  domeMat.uniforms.uOpacity.value = DOME_OPACITY * smooth(defR * 0.95, defR * 1.3, camera.position.length());
+  battery.userData.beacon.material.opacity = 0.55 + 0.45 * Math.sin(realClock.t * 4);
+
+  // Labels
+  const showLabels = layers.labels;
+  lblThreat.visible = showLabels && threatAlive;
+  lblThreat.position.copy(tp);
+  lblThreat.userData.inner.innerHTML = `Threat<small>${tp.y.toFixed(1)} km · ${fmtSpd(tv.length())}</small>`;
+  lblKV.visible = showLabels && launched && kvAlive;
+  lblKV.position.copy(ip);
+  lblKV.userData.inner.innerHTML = `${stage === 1 ? 'Interceptor' : 'Kill vehicle'}<small>${fmtSpd(iv.length())} · ${g.toFixed(1)} g</small>`;
+  lblBattery.visible = showLabels;
+  lblPip.visible = showLabels && !!pipPos && launched && !killed;
+  lblKill.visible = showLabels && killed;
+  lblImpact.visible = showLabels && impacted;
+  gridLabels.forEach((o) => { o.visible = sciStyle && showLabels && (o.userData.kind === 'map') === (camMode === 'top'); });
+
+  // Camera
+  if (camMode === 'orbit') {
+    if (orbitFollow) {
+      const fp = orbitFollow === 'threat' ? (killed ? killPos : impacted ? impactPos : tp) : (killed ? killPos : ip);
+      if (fp) {
+        // Carry the camera along with the vehicle; the user's rotation and zoom are kept
+        if (followFresh) controls.target.copy(fp);
+        else { tmpA.copy(fp).sub(followPos); camera.position.add(tmpA); controls.target.add(tmpA); }
+        followPos.copy(fp);
+        followFresh = false;
+      }
+    }
+    controls.update();
+    camLookTarget.copy(controls.target);
+  } else {
+    shot({ time, tp, ip, tv, launched, stage, sep, killed, impacted, ttg });
+    const k = snapCamera ? 1 : 1 - Math.exp(-dtReal * (camMode === 'cinematic' ? 1.8 : 6));
+    snapCamera = false;
+    camera.position.lerp(desiredPos, k);
+    camLookTarget.lerp(desiredTarget, k);
+    if (camera.position.y < 0.02) camera.position.y = 0.02;
+    camera.lookAt(camLookTarget);
+  }
+  sky.position.copy(camera.position);
+  camera.updateMatrixWorld();
+  placeLabel(lblThreat, tp, false);
+  placeLabel(lblKV, ip, true);
+  if (lblPip.visible) {
+    // Point the PIP and battery labels away from each other so they never overlap
+    const px = tmpProj.copy(pipPos).project(camera).x;
+    const bx = tmpProj.set(0, 0.05, 0).project(camera).x;
+    lblPip.element.classList.toggle('left', px < bx);
+    lblBattery.element.classList.toggle('left', px >= bx);
+  } else lblBattery.element.classList.remove('left');
+  fadeLabelsUnderPanels();
+  if (sciStyle) drawRefs();
+
+  // HUD
+  $('clock').innerHTML = `<span class="unit">T+</span>${time.toFixed(2).padStart(6, '0')}`;
+  const chip = $('status-chip');
+  let st = 'Tracking', sc = '';
+  if (killed) { st = 'Kill'; sc = 'ok'; }
+  else if (impacted) { st = D.outcome === 'NO ENGAGE' ? 'Impact · outside' : 'Impact'; sc = D.outcome === 'NO ENGAGE' ? '' : 'bad'; }
+  else if (!launched) { if (D.outcome === 'NO ENGAGE' && time >= (D.minTrackTime ?? tStart)) st = 'Weapons hold'; }
+  else if (stage === 1) { st = 'Boost'; sc = 'warn'; }
+  else if (missed) { st = 'Missed'; sc = 'bad'; }
+  else if (terminalT != null && time >= terminalT) { st = 'Terminal'; sc = ttg < 4 ? 'kv pulse' : 'kv'; }
+  else { st = 'Midcourse'; sc = 'kv'; }
+  if (chip.textContent !== st) chip.textContent = st;
+  chip.className = `flag ${sc}`;
+
+  let cur = 0;
+  phases.forEach((p, i) => { if (time >= p.t) cur = i; });
+  phases.forEach((p, i) => { p.el.classList.toggle('done', i < cur); p.el.classList.toggle('current', i === cur); });
+
+  $('th-alt').textContent = threatAlive ? fmtKm(tp.y) : '—';
+  $('th-spd').textContent = threatAlive ? fmtSpd(tv.length()) : '—';
+  $('th-rng').textContent = threatAlive ? fmtKm(Math.hypot(tp.x, tp.z)) : '—';
+  {
+    const k6 = 6 * fi;
+    $('th-sig').textContent = threatAlive ? `±${Math.hypot(D.kfSig[k6], D.kfSig[k6 + 1], D.kfSig[k6 + 2]).toFixed(1)} m` : '—';
+    $('th-err').textContent = threatAlive ? `${Math.hypot(D.kfErr[k6], D.kfErr[k6 + 1], D.kfErr[k6 + 2]).toFixed(1)} m` : '—';
+  }
+  $('kv-stage').textContent = !launched ? 'On launcher' : killed ? 'Hit target' : impacted || missed ? 'Missed' : stage === 1 ? 'Boost' : 'Coasting';
+  $('kv-alt').textContent = launched && kvAlive ? fmtKm(ip.y) : '—';
+  $('kv-spd').textContent = launched && kvAlive ? fmtSpd(iv.length()) : '—';
+  $('kv-g').textContent = launched && kvAlive ? `${g.toFixed(1)} g` : '—';
+  $('kv-gbar').style.width = `${launched && kvAlive ? Math.min(100, (g / (D.maxG || 40)) * 100) : 0}%`;
+  $('en-sep').textContent = launched && !killed && !impacted ? fmtKm(sep) : '—';
+  // Negative closing speed means the range is opening
+  $('en-cls').textContent = launched && !killed && !impacted ? fmtSpd(closing) : '—';
+  $('en-ttg').textContent = launched && !killed && !impacted && isFinite(ttg) ? `${ttg.toFixed(1)} s` : '—';
+
+  let count = 0;
+  events.forEach((e) => { const past = time >= e.t; e.el.classList.toggle('past', past); if (past) count++; });
+  if (count !== lastEventCount) {
+    events.forEach((e, i) => e.el.classList.toggle('latest', i === count - 1 && lastEventCount >= 0 && count > lastEventCount));
+    lastEventCount = count;
+  }
+
+  if (!scrubbing) tl.value = time;
+  tl.style.setProperty('--p', `${((time - tStart) / (tEnd - tStart)) * 100}%`);
+  $('tlabel').innerHTML = `<b>${time.toFixed(1)}</b> / ${tEnd.toFixed(1)} s`;
+
+  const showBda = !bdaDismissed && (endEventT != null ? time >= endEventT + 2 : time >= tEnd - 1e-6);
+  if (showBda !== bdaShown) {
+    bdaShown = showBda;
+    document.body.classList.toggle('bda-on', showBda);
+    const el = $('bda');
+    if (showBda) { el.classList.add('mounted'); requestAnimationFrame(() => el.classList.add('show')); }
+    else el.classList.remove('show', 'mounted');
+  }
+
+  drawProfile(time, tp, ip);
+  if (analysisOpen) figures.forEach((f) => { if (f.tab === analysisTab) drawOverlay(f, time); });
+}
+
+// ============================================================================
+// LOOP
+// ============================================================================
+let last = performance.now();
+function frame(now) {
+  const dtReal = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (playing && !scrubbing) {
+    simTime += dtReal * speed * slowFactor(simTime);
+    if (simTime >= tEnd) { simTime = tEnd; setPlaying(false); }
+  }
+  update(simTime, dtReal);
+  composer.render();
+  labelRenderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame((now) => {
+  last = now;
+  frame(now);
+  document.getElementById('loading').classList.add('gone');
+});
+</script>
+</body>
+</html>
