@@ -1,17 +1,5 @@
 import numpy as np
 
-# Backend selection must happen before importing pyplot
-import matplotlib
-try:
-    matplotlib.use("TkAgg")  # try windowed backend
-except Exception:
-    pass
-
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-from matplotlib.widgets import Slider
-
 from rich.console import Console
 from rich.table import Table
 
@@ -33,13 +21,13 @@ class KalmanFilter:
         self.H = np.eye(6)
 
         # Process Noise (Q) and Measurement Noise (R)
-        self.Q = np.eye(6) * 0.1
+        self.Q = np.eye(6) * SimConfig.kf_q
         self.R = np.eye(6)
         for i in range(3):
             self.R[i, i] = pos_std**2
             self.R[i+3, i+3] = vel_std**2
 
-        self.P = np.eye(6) * 500.0
+        self.P = np.eye(6) * SimConfig.kf_p0
         self.x = np.zeros(6)
         self.initialized = False
 
@@ -137,6 +125,10 @@ class SimConfig:
     pn_gain      = 4.0       # PN gain
     max_g        = 50.0      # 50G turn capability
     kill_radius  = 30.0      # 30 m kill volume
+    booster_drag = 0.0001    # booster quadratic drag coefficient
+    threat_drag  = 0.00004   # 1/m, threat quadratic drag (acceleration per speed^2)
+    kf_q         = 0.1       # Kalman process-noise variance (diagonal)
+    kf_p0        = 500.0     # Kalman initial covariance (diagonal)
 
     defended_radius = 30000.0  # m – visual only; this mode fires at every threat
 
@@ -155,7 +147,7 @@ class BallisticThreat:
 
         # Physics with drag
         speed = np.linalg.norm(self.vel)
-        drag = -0.00004 * speed * self.vel
+        drag = -SimConfig.threat_drag * speed * self.vel
         self.vel += (np.array([0, 0, -SimConfig.g]) + drag) * dt
         self.pos += self.vel * dt
         if self.pos[2] <= 0:
@@ -226,7 +218,7 @@ class AdvancedInterceptor:
             u = self.vel / (vmag + 1e-9)
 
         f_thrust   = u * thrust
-        f_drag     = -(0.0001 if self.stage == "BOOST" else SimConfig.kv_drag) * np.linalg.norm(self.vel) * self.vel
+        f_drag     = -(SimConfig.booster_drag if self.stage == "BOOST" else SimConfig.kv_drag) * np.linalg.norm(self.vel) * self.vel
         f_grav     = np.array([0, 0, -SimConfig.g]) * self.mass
         f_maneuver = acc_cmd * self.mass
 
@@ -287,11 +279,13 @@ def run():
     t = 0.0
     hist = {
         't': [], 't_pos': [], 'i_pos': [],
-        'k_pos': [], 'status': [], 'stage': [], 'raw': []
+        'k_pos': [], 'status': [], 'stage': [], 'raw': [],
+        't_vel': [], 'i_vel': [], 'kf_err': [], 'kf_sig': []
     }
 
     outcome    = "UNKNOWN"
     kill_info  = {}
+    launch_pip = None  # for display only; this mode does not gate on it
 
     console.print("\n" + "=" * 60, style="bold blue")
     console.print("[bold green]THAAD v5.0 | MAX-PERFORMANCE INTERCEPT DEMO[/bold green]")
@@ -303,6 +297,9 @@ def run():
         mp = threat.pos + np.random.normal(0, SimConfig.pos_noise, 3)
         mv = threat.vel + np.random.normal(0, SimConfig.vel_noise, 3)
         ep, ev = kf.update(mp, mv)
+        # Filter error vs truth and its 1-sigma bounds, for the analysis view
+        kf_err = np.hstack((ep - threat.pos, ev - threat.vel))
+        kf_sig = np.sqrt(np.diag(kf.P))
 
         # 2. Launch Logic:
         #    If target is descending (ev[2]<0), and we have some tracking, then fire.
@@ -310,6 +307,7 @@ def run():
             direction = ep - interceptor.pos
             direction = direction / np.linalg.norm(direction)
             interceptor.launch(t, direction)
+            launch_pip = kf.predict_impact(SimConfig.g)
             console.print(
                 f"[bold yellow][T+{t:05.2f}] LAUNCH:[/bold yellow] Track confirmed. WEAPONS FREE."
             )
@@ -341,6 +339,10 @@ def run():
                 hist['raw'].append(mp)
                 hist['status'].append("HIT")
                 hist['stage'].append(interceptor.stage)
+                hist['t_vel'].append(t_v)
+                hist['i_vel'].append(i_v)
+                hist['kf_err'].append(kf_err)
+                hist['kf_sig'].append(kf_sig)
 
                 outcome = "KILL"
                 kill_info = {
@@ -372,6 +374,10 @@ def run():
         hist['raw'].append(mp.copy())
         hist['status'].append("FLYING" if interceptor.launched else "SEARCH")
         hist['stage'].append(interceptor.stage)
+        hist['t_vel'].append(threat.vel.copy())
+        hist['i_vel'].append(interceptor.vel.copy())
+        hist['kf_err'].append(kf_err)
+        hist['kf_sig'].append(kf_sig)
 
         t = t_next
 
@@ -403,126 +409,38 @@ def run():
 
     console.print(table)
 
+    hist['meta'] = {
+        'title':           "THAAD v5.0 | MAX-PERFORMANCE INTERCEPT DEMO",
+        'mode':            "MAX-PERFORMANCE MODE",
+        'engage_rule':     "FIRE ON TRACK",
+        'outcome':         outcome,
+        'kill':            kill_info or None,
+        'launch_pip':      launch_pip,
+        'impact':          threat.pos.copy() if outcome in ("GROUND", "NO ENGAGE") else None,
+        'g_hist':          interceptor.g_hist,
+        'defended_radius': SimConfig.defended_radius,
+        'kill_radius':     SimConfig.kill_radius,
+        'max_g':           SimConfig.max_g,
+        'params':          {k: v for k, v in vars(SimConfig).items() if not k.startswith('_')},
+        'min_track_time':  None,
+    }
+
     return hist
 
 # ============================================================================
-# 6. VISUALIZATION
+# 6. VISUALIZATION – 3D browser replay (see replay_viewer.py)
 # ============================================================================
 if __name__ == "__main__":
-    h = run()
+    import sys
+    from pathlib import Path
+    from replay_viewer import show_replay
 
-    t_pos = np.array(h['t_pos'])
-    i_pos = np.array(h['i_pos'])
-    k_pos = np.array(h['k_pos'])
+    # A fixed seed reproduces a scenario exactly: python "<this file>" <seed>
+    seed = int(sys.argv[1]) if len(sys.argv) > 1 else int(np.random.SeedSequence().entropy % 2**31)
+    np.random.seed(seed)
+    console.print(f"[dim]Seed {seed} – rerun this scenario with: python \"{Path(__file__).name}\" {seed}[/dim]")
 
-    # Subsampling for smooth playback
-    PLAYBACK_SPEED = 5
-    frame_indices = np.arange(0, len(h['t']), PLAYBACK_SPEED, dtype=int)
-    if frame_indices[-1] != len(h['t']) - 1:
-        frame_indices = np.append(frame_indices, len(h['t']) - 1)
-
-    fig = plt.figure(figsize=(14, 10))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.mouse_init()
-
-    # Ground Zone (visual only)
-    theta = np.linspace(0, 2 * np.pi, 100)
-    R = SimConfig.defended_radius
-    ax.plot(R * np.cos(theta), R * np.sin(theta), 0, 'lime', label='Defended Area')
-
-    # Trajectories
-    lt, = ax.plot([], [], [], 'r--', label='Threat')
-    li, = ax.plot([], [], [], 'cyan', linewidth=2, label='Interceptor')
-    lk, = ax.plot([], [], [], 'g-', alpha=0.5, label='Kalman Track')
-
-    # Markers
-    pt, = ax.plot([], [], [], 'ro')
-    pi, = ax.plot([], [], [], 'b^')
-    expl, = ax.plot([], [], [], 'y*', markersize=50, visible=False)
-
-    txt_stat = ax.text2D(0.05, 0.95, "READY", transform=ax.transAxes, fontweight='bold')
-
-    ax.set_xlim(-60000, 60000)
-    ax.set_ylim(-60000, 60000)
-    ax.set_zlim(0, 80000)
-    ax.set_xlabel("East (m)")
-    ax.set_ylabel("North (m)")
-    ax.set_zlabel("Altitude (m)")
-    ax.legend()
-
-    def draw_frame(idx):
-        if idx < 0 or idx >= len(h['t']):
-            return
-
-        lt.set_data(t_pos[:idx + 1, 0], t_pos[:idx + 1, 1])
-        lt.set_3d_properties(t_pos[:idx + 1, 2])
-
-        li.set_data(i_pos[:idx + 1, 0], i_pos[:idx + 1, 1])
-        li.set_3d_properties(i_pos[:idx + 1, 2])
-
-        lk.set_data(k_pos[:idx + 1, 0], k_pos[:idx + 1, 1])
-        lk.set_3d_properties(k_pos[:idx + 1, 2])
-
-        pt.set_data([t_pos[idx, 0]], [t_pos[idx, 1]])
-        pt.set_3d_properties([t_pos[idx, 2]])
-
-        pi.set_data([i_pos[idx, 0]], [i_pos[idx, 1]])
-        pi.set_3d_properties([i_pos[idx, 2]])
-
-        stat = h['status'][idx]
-        mode = h['stage'][idx]
-        txt_stat.set_text(f"STATUS: {stat} | MODE: {mode}")
-
-        if stat == "HIT":
-            txt_stat.set_color("green")
-            expl.set_data([t_pos[idx, 0]], [t_pos[idx, 1]])
-            expl.set_3d_properties([t_pos[idx, 2]])
-            expl.set_visible(True)
-            pt.set_visible(False)
-            pi.set_visible(False)
-        else:
-            txt_stat.set_color("black")
-            # Restore markers when scrubbing back before the hit
-            expl.set_visible(False)
-            pt.set_visible(True)
-            pi.set_visible(True)
-
-        return lt, li, lk, pt, pi, expl, txt_stat
-
-    def update(f_idx):
-        if f_idx >= len(frame_indices):
-            return
-        idx = frame_indices[f_idx]
-        return draw_frame(idx)
-
-    anim = FuncAnimation(
-        fig, update, frames=len(frame_indices),
-        interval=20, blit=False, repeat=False
-    )
-
-    # --- OPTIONAL: save to MP4 (needs ffmpeg installed) ---
-    from matplotlib.animation import FFMpegWriter
-
-    writer = FFMpegWriter(
-        fps=30,                          # video framerate
-        metadata={'title': 'THAAD Sim'}, # optional
-        bitrate=2400
-    )
-        # Time Slider
-    ax_sl = plt.axes([0.2, 0.02, 0.6, 0.03])
-    sl = Slider(ax_sl, "Time Frame", 0, len(frame_indices) - 1,
-                valinit=0, valfmt="%0.0f")
-
-    def on_change(val):
-        f = int(sl.val)
-        f = max(0, min(f, len(frame_indices) - 1))
-        idx = frame_indices[f]
-        draw_frame(idx)
-        fig.canvas.draw_idle()
-
-    sl.on_changed(on_change)
-    plt.show()
-
-
-    
-
+    hist = run()
+    hist['meta']['seed'] = seed
+    path = show_replay(hist)
+    console.print(f"[dim]Replay opened in your browser: {path}[/dim]")
