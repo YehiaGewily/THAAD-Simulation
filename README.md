@@ -6,7 +6,7 @@ A Python-based study of Guidance, Navigation, and Control (GNC) for kinetic inte
 
 ## Overview
 
-This project is a 3D kinematic simulation of a **THAAD-style terminal missile defense system**, built in Python using NumPy, Matplotlib, and Rich.
+This project is a 3D kinematic simulation of a **THAAD-style terminal missile defense system**, built in Python using NumPy and Rich, with a Three.js replay viewer in the browser.
 
 The goal is **not** to model any real weapon system, but to:
 
@@ -23,7 +23,7 @@ Instead of being just an animation, the code closes a simplified but complete **
 5. **Physics** – multi-stage interceptor dynamics, mass depletion, drag, and gravity.
 6. **Engagement Assessment** – continuous collision detection (CPA) and a battle-damage summary.
 
-All of this is visualized in an interactive **3D Matplotlib plot** with a **time slider** and a **Rich-based BDA table** in the terminal.
+All of this is visualized in an interactive **3D browser replay** (Three.js) with cinematic cameras, a timeline, live telemetry, and a **Rich-based BDA table** in the terminal.
 
 > ⚠️ This is an educational / hobby simulation. Numbers are illustrative, not real-world data.
 
@@ -37,8 +37,11 @@ From the repository root:
 .
 ├── THAAD MAX_performance prototype.py   # v5.0 – "Max-Performance" / High-Margin Mode
 ├── THAAD Ultimlate Prototype.py         # v5.1 – "Engineering Mode" / Tuned Realism
-├── Older Attempts/                      # Scratch & learning experiments
-│   └── ... (early prototypes, tests, etc.) 
+├── replay_viewer.py                     # Packs a finished run into a browser replay
+├── viewer/replay_template.html          # Three.js replay viewer
+├── replays/                             # Generated replays (git-ignored)
+├── older_attempts/                      # Scratch & learning experiments
+│   └── ... (early prototypes, tests, etc.)
 └── README.md
 ```
 
@@ -92,10 +95,10 @@ They are kept for historical context and quick reference, but the main work now 
 You need Python 3.9+ and the following packages:
 
 ```bash
-pip install numpy matplotlib rich
+pip install numpy rich
 ```
 
-On some systems you may also need `tkinter` (for the `TkAgg` backend) if you want a separate interactive window.
+The 3D replay runs in your web browser and loads Three.js from a CDN, so the first run needs an internet connection.
 
 ### 2. Run the engineering mode (recommended)
 
@@ -109,13 +112,48 @@ python "THAAD Ultimlate Prototype.py"
 python "THAAD MAX_performance prototype.py"
 ```
 
-### 4. Controls
+Each run uses a random seed and prints it. To repeat a scenario exactly, pass the seed:
 
-* **Mouse drag** – rotate the 3D scene.
-* **Mouse wheel / trackpad** – zoom in and out.
-* **Time slider (bottom)** – scrub through the engagement frame-by-frame.
+```bash
+python "THAAD Ultimlate Prototype.py" 1271439923
+```
 
-In the terminal you’ll see Rich logs with launch events, kill / fail messages, and a final BDA table.
+### 4. Watch the replay
+
+When the run finishes, the terminal prints Rich logs with launch events, kill / fail messages, and a final BDA table. The engagement then opens in your browser as a 3D replay, saved to `replays/replay_<timestamp>.html`.
+
+The replay includes:
+
+* Terrain with the defended area, range rings, the predicted impact point (PIP), radar returns, the Kalman track, and the line of sight.
+* A mission clock with a phase stepper (Track → Boost → Midcourse → Terminal → Kill/Impact). Click a phase to jump to it.
+* Live telemetry, including the track's 1σ uncertainty and its error against the truth. The panels also hold an event log, a side-profile chart, and a debrief card after the engagement.
+* Two rendering styles (`G` switches between them):
+  * **Scientific** (the default): plain trajectories, drop lines to the ground, an altitude scale at the battery, a scale bar and an east–north–up axis triad, and exact intercept and impact markers. Ground axis labels show in the top-down view.
+  * **Cinematic**: glow, a cloud deck, smoke trails, a radar sweep, and explosion effects.
+* An **Analysis** panel (`A`):
+  * **Kinematics**: altitude, speed, separation, and closing velocity.
+  * **Guidance**: line-of-sight rate, commanded acceleration against its limit, divert Δv used against its budget, and zero-effort miss.
+  * **Kalman filter**: RMS errors, noise reduction, 3σ consistency, per-axis position error with ±3σ bounds, and filtered versus raw radar error.
+  * **Methods**: the model equations, every parameter used in the run, assumptions, and the command to reproduce the run.
+  * All figures share the replay's time cursor. Hover for values and click to seek. **Export CSV** downloads the full time series.
+
+| Control | Action |
+| --- | --- |
+| `Space` | Play / pause |
+| `←` / `→` (`Shift` for 5 s) | Step 1 s back / forward |
+| `Home` / `End` | Jump to start / end |
+| `1`–`6` | Playback speed 0.25× – 20× |
+| `C` `O` `T` `I` `V` | Camera: cinematic, free orbit, chase threat, chase interceptor, top-down |
+| `R` `K` `L` `H` `M` | Toggle radar returns, Kalman track, line of sight, labels, slow motion at intercept (also in the **Layers** menu) |
+| `A` | Open / close the Analysis panel |
+| `G` | Switch between Scientific and Cinematic style |
+| `F` | Focus mode: hide the side panels |
+| `?` | Show all keyboard shortcuts |
+| Mouse | Drag in any view to spin the camera, scroll to zoom, right-drag to pan. Grabbing a chase camera keeps orbiting that vehicle as it flies; `C`/`T`/`I`/`V` hand the camera back |
+
+To open a replay at a given moment, add a hash to the file URL, for example `replay_….html#t=57&cam=threat&paused`. Add `&focus` to hide the panels, `&analysis&tab=kf` to open a given Analysis tab (`kin`, `gui`, `kf`, `methods`), or `&style=cinematic` for the cinematic look.
+
+Vehicle models are drawn about 8× real size so they can be seen in the close-up cameras.
 
 ---
 
@@ -353,7 +391,4 @@ Some ideas for future work:
 * Batch Monte Carlo runs to gather statistics on the probability of kill vs. configuration.
 * Simple GUI front-end to let users configure scenarios without editing code.
 
-
 ---
-
-
