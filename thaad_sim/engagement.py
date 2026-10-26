@@ -61,7 +61,7 @@ def run(cfg, rng, console=None):
         f"aim {sc.aim_radius/1000:.1f} km from origin, T_imp~{sc.impact_time:.1f} s[/dim]"
     )
     interceptor = Interceptor([0, 0, 0], cfg.interceptor, g, cfg.sim.integrator)
-    kf = KalmanFilter(dt, cfg.sensor.pos_noise, cfg.sensor.vel_noise, cfg.kalman.q, cfg.kalman.p0, g)
+    kf = KalmanFilter(dt, cfg.sensor.pos_noise, cfg.sensor.vel_noise, cfg.kalman.q, g)
 
     t_max = max(cfg.sim.t_max, sc.impact_time * 2.0 + 30.0)
 

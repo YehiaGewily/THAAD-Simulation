@@ -14,8 +14,7 @@ sensor:
   vel_noise: 8.0      # m/s, 1-sigma per axis
 
 kalman:
-  q: 0.1              # process-noise variance (diagonal)
-  p0: 500.0           # initial covariance (diagonal)
+  q: 30.0             # m^2/s^3, white-noise acceleration spectral density per axis
 
 threat:
   drag: 0.00004       # 1/m, quadratic drag (acceleration per speed^2)

@@ -1954,8 +1954,7 @@ function buildMethods() {
     ['g', 'g', 'Gravitational acceleration', 'm/s²'],
     ['pos_noise', String.raw`\sigma_p`, 'Radar position noise, 1σ per axis', 'm'],
     ['vel_noise', String.raw`\sigma_v`, 'Radar velocity noise, 1σ per axis', 'm/s'],
-    ['kf_q', 'q', 'Process-noise variance (Q = qI)', '—'],
-    ['kf_p0', 'p_0', 'Initial covariance (P₀ = p₀I)', '—'],
+    ['kf_q', 'q', 'White-noise acceleration spectral density, per axis', 'm²/s³'],
     ['threat_drag', 'k_T', 'Threat drag coefficient', '1/m'],
     ['boost_thrust', 'F_T', 'Boost thrust', 'N'],
     ['isp', String.raw`I_{sp}`, 'Booster specific impulse', 's'],
@@ -1999,12 +1998,19 @@ function buildMethods() {
       <div class="eq">${tex(String.raw`\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
       ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}`],
     ['Tracking: Kalman filter', `
-      <p>Six-state constant-velocity filter with a gravity bias in the prediction. The radar observes position and velocity directly (H = I) with independent Gaussian noise.</p>
-      <div class="eq">${tex(String.raw`\mathbf x = \begin{bmatrix}\mathbf p\\ \mathbf v\end{bmatrix},\quad F = \begin{bmatrix} I & \Delta t\, I\\ 0 & I\end{bmatrix},\quad R = \operatorname{diag}(\sigma_p^2 I,\ \sigma_v^2 I),\quad Q = q I`)}</div>
-      <div class="eq">${tex(String.raw`\mathbf x^- = F\mathbf x - g\,\Delta t\,\mathbf e_{v_z},\qquad P^- = F P F^\top + Q`)}</div>
-      <div class="eq">${tex(String.raw`K = P^-\!\left(P^- + R\right)^{-1},\qquad \mathbf x = \mathbf x^- + K(\mathbf z - \mathbf x^-),\qquad P = (I - K)P^-`)}</div>`],
+      <p>Six-state linear filter. The threat moves under known gravity, entered as a control input, and is perturbed by continuous white-noise acceleration of spectral density q on each axis. The radar observes position and velocity directly (H = I) with independent Gaussian noise. The first measurement initializes the state, with P₀ = R.</p>
+      <div class="eq">${tex(String.raw`\mathbf x = \begin{bmatrix}\mathbf p\\ \mathbf v\end{bmatrix},\quad F = \begin{bmatrix} I & \Delta t\, I\\ 0 & I\end{bmatrix},\quad B = \begin{bmatrix} \tfrac12\Delta t^2 I\\ \Delta t\, I\end{bmatrix},\quad \mathbf u = -g\,\hat{\mathbf z},\quad R = \operatorname{diag}(\sigma_p^2 I,\ \sigma_v^2 I)`)}</div>
+      <div class="eq">${tex(String.raw`Q = q\begin{bmatrix} \tfrac13\Delta t^3 I & \tfrac12\Delta t^2 I\\ \tfrac12\Delta t^2 I & \Delta t\, I\end{bmatrix}`)}</div>
+      <div class="eq">${tex(String.raw`\mathbf x^- = F\mathbf x + B\mathbf u,\qquad P^- = F P F^\top + Q`)}</div>
+      <div class="eq">${tex(String.raw`S = H P^- H^\top + R,\qquad K = P^- H^\top S^{-1},\qquad \mathbf x = \mathbf x^- + K\boldsymbol\nu,\quad \boldsymbol\nu = \mathbf z - H\mathbf x^-`)}</div>
+      <div class="eq">${tex(String.raw`P = (I - K H)\,P^-\,(I - K H)^\top + K R K^\top`)}</div>
+      <p>Q is the white-noise acceleration integrated over one step. K comes from a linear solve with S rather than an explicit inverse, and the Joseph-form update keeps P symmetric and positive definite for any gain.</p>
+      <p>Consistency is checked with the normalized estimation error squared (NEES) and the normalized innovation squared (NIS). For a consistent filter both are χ² with 6 degrees of freedom; averaged over N independent runs, N times the average is χ² with 6N degrees of freedom.</p>
+      <div class="eq">${tex(String.raw`\epsilon = (\hat{\mathbf x} - \mathbf x)^\top P^{-1} (\hat{\mathbf x} - \mathbf x),\qquad \epsilon_\nu = \boldsymbol\nu^\top S^{-1} \boldsymbol\nu,\qquad \mathbb E[\epsilon] = \mathbb E[\epsilon_\nu] = 6`)}</div>
+      <p>The filter does not model drag, but the threat has it. With drag off and the truth driven by the same Q, NEES and NIS stay inside their 95 % bounds. Against the dragged threat the filter is overconfident early in the flight, while drag is strongest. <code>scripts/filter_consistency.py</code> plots both cases.</p>`],
     ['Launch decision', gated ? `
       <p>The predicted impact point (PIP) is the ballistic ground crossing from the current estimate, ignoring drag. The interceptor launches once the track is at least t<sub>trk</sub> old, the threat is descending and the PIP is inside the defended radius.</p>
+      <p>Because drag is ignored, the PIP lies beyond the true impact point and the predicted time to impact is too short. The bias is kilometres early in flight and shrinks to metres in the last ten seconds; <code>scripts/drag_mismatch.py</code> measures it.</p>
       <div class="eq">${tex(String.raw`t^\ast = \frac{v_z + \sqrt{v_z^2 + 2 g z}}{g},\qquad \mathrm{PIP} = (x + v_x t^\ast,\ y + v_y t^\ast),\qquad \text{launch if } \lVert\mathrm{PIP}\rVert \le R_D`)}</div>` : `
       <p>This mode launches on the first descending track estimate after 3 s and does not gate on the predicted impact point. The PIP shown is for reference only.</p>`],
     ['Kill assessment', `
@@ -2022,6 +2028,8 @@ function buildMethods() {
         <li>Flat Earth, constant gravity, no Earth rotation.</li>
         <li>Quadratic drag with constant coefficients: no atmosphere model or Mach dependence.</li>
         <li>The radar measures Cartesian position and velocity directly; real sensors measure range and angles.</li>
+        <li>The Kalman filter and the impact predictor assume drag-free flight, while the threat has drag. The mismatch is not corrected: it biases the predicted impact point and makes the filter overconfident.</li>
+        <li>Drag uses a constant coefficient with no air-density model, so it acts at full strength even at 70 km altitude and overstates the deceleration of a real high-altitude threat.</li>
         <li>Point-mass vehicles with no attitude dynamics, actuator lag or seeker model.</li>
         <li>Constant thrust and specific impulse during boost. The kill vehicle's mass is held at m<sub>KV</sub>: its divert budget is a Δv limit, and divert propellant is not modeled.</li>
         <li>Analysis quantities (LOS rate, closing velocity, ZEM) are computed from the true states; guidance itself uses the Kalman estimate.</li>

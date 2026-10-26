@@ -42,6 +42,7 @@ From the repository root:
 │   ├── integrators.py          # integrate(state, deriv_fn, dt): forward Euler and RK4
 │   ├── verification.py         # Reference problems for the integrator tests and study
 │   ├── estimation.py           # 6-state Kalman filter
+│   ├── consistency.py          # NEES/NIS and impact-prediction bias over seeded tracking runs
 │   ├── guidance.py             # Proportional navigation, g-limit, divert budget
 │   ├── scenario.py             # Random threat scenarios
 │   ├── engagement.py           # Run loop, launch rule, CPA kill check, outcome and BDA
@@ -51,8 +52,11 @@ From the repository root:
 │   ├── engineering.yaml        # Engineering mode (tuned realism)
 │   └── demo.yaml               # Max-performance demo
 ├── tests/                      # pytest suite
-├── scripts/convergence_study.py  # Error vs dt for both integrators
-├── docs/figures/               # Generated figures (convergence.png)
+├── scripts/
+│   ├── convergence_study.py    # Error vs dt for both integrators
+│   ├── filter_consistency.py   # Average NEES/NIS against chi-square bounds
+│   └── drag_mismatch.py        # Impact-prediction bias from ignoring drag
+├── docs/figures/               # Generated figures (convergence, nees, nis, pip_bias)
 ├── replays/                    # Generated replays (git-ignored)
 ├── older_attempts/             # Scratch & learning experiments
 ├── pyproject.toml
@@ -69,7 +73,7 @@ This is the **primary** mode and the CLI default.
 
 * Uses randomized threat geometry (55–75 km altitude, 35–55 km range, any azimuth) with the aim point scattered up to 35 km from the defended origin.
 * Simulates a two-stage interceptor with moderate thrust (150 kN at an Isp of 170 s, which burns its 450 kg of propellant in 5.0 s), a 30 G limit, and a kill vehicle with a finite **divert Δv budget** (435 m/s).
-* Applies a 6-state Kalman Filter with gravity bias to track the threat.
+* Tracks the threat with a 6-state Kalman filter (gravity as a control input, white-noise acceleration process noise).
 * Computes a **Predicted Impact Point (PIP)** and launches only when:
 
   * The threat is clearly descending.
@@ -149,6 +153,14 @@ The suite checks that a fixed seed gives identical runs, that the package matche
 * At dt, dt/2, dt/4 and dt/8 the observed convergence order is about 1 for Euler and about 4 for RK4, for both the dragged threat and an interceptor flying through burnout.
 * The interceptor's mass falls at F/(Isp·g₀), the booster separates at burnout, and the burn adds the rocket-equation Δv.
 
+The Kalman filter tests (`tests/test_estimation.py`) check:
+
+* The discretized Q matches the white-noise acceleration integral, and F x + B u propagates a drag-free ballistic state exactly.
+* The gain from the linear solve and the Joseph-form update match the textbook forms.
+* P stays symmetric positive definite through a whole dragged flight, for q = 0, 30 and 10⁴.
+* With drag off and the truth driven by the filter's own Q, the 20-run average NEES and NIS stay inside their chi-square 95 % bounds, and the same check rejects a q that is wrong by a factor of 5.
+* The documented drag mismatch: the filter that passes with drag off fails with drag on, and the drag-free PIP lands beyond the true impact point.
+
 GitHub Actions runs the suite on every push and pull request.
 
 ### 5. Convergence study
@@ -165,7 +177,19 @@ This runs the same reference problems and writes a log-log plot of error against
 
 ![Integrator convergence](docs/figures/convergence.png)
 
-### 6. Watch the replay
+### 6. Filter consistency and drag-mismatch studies
+
+```bash
+python scripts/filter_consistency.py
+```
+
+```bash
+python scripts/drag_mismatch.py
+```
+
+The first runs 50 seeded tracking runs and writes the average NEES and NIS against their chi-square bounds to `docs/figures/nees.png` and `nis.png`. The second runs 100 and writes the impact-prediction bias to `docs/figures/pip_bias.png`. Both take about a minute. [Radar Model & Kalman Filtering](#radar-model--kalman-filtering) discusses the results.
+
+### 7. Watch the replay
 
 When the run finishes, the terminal prints Rich logs with launch events, kill / fail messages, and a final BDA table. The engagement then opens in your browser as a 3D replay, saved to `replays/replay_<timestamp>.html` under the current folder.
 
@@ -246,7 +270,7 @@ Inputs that are not part of the state are held constant over a step. Guidance ru
 * The default integrator is RK4.
 * `boost_time` is replaced by `isp`. Each mode's Isp gives nearly the same burn time and total impulse as before: 5.00 s instead of 5 s for engineering, 8.02 s instead of 8 s for the demo.
 
-So a given seed flies a slightly different trajectory than before. The scenario and the sensor noise are unchanged, and the recorded legacy seeds keep their outcomes, with kill times within 0.25 s. Over seeds 0–299 the engineering mode now kills 174 of 289 engaged threats, down from 175, and still holds fire on 11; the demo still kills 300/300.
+So a given seed flies a slightly different trajectory than before. The scenario and the sensor noise are unchanged, and the recorded legacy seeds keep their outcomes, with kill times within 0.25 s. Over seeds 0–299 the engineering mode then killed 174 of 289 engaged threats, down from 175, and still held fire on 11; the demo still killed 300/300. (The Kalman filter rework below changed these numbers again.)
 
 ---
 
@@ -262,33 +286,90 @@ The radar is modeled as a noisy 3D sensor:
 >
 > v_meas = v + N(0, σv²)
 
-A **linear Kalman Filter** estimates the state
+A **linear Kalman filter** (`thaad_sim/estimation.py`) estimates the state x = [x, y, z, vx, vy, vz]ᵀ. It models the threat as a body under known gravity, perturbed by continuous white-noise acceleration:
 
-> x = [x, y, z, vx, vy, vz]^T
+> x_{k+1} = F x_k + B u + w_k,  w_k ~ N(0, Q)
+>
+> z_k = H x_k + v_k,  v_k ~ N(0, R)
 
-Key points:
+with
 
-* **State transition**: constant-velocity model with position integrating velocity each time step.
-* **Measurement model**: identity matrix; we directly observe position and velocity, but noisy.
-* **Process noise**: small diagonal Q to keep the filter flexible.
-* **Measurement noise**: R built from the chosen position and velocity standard deviations.
+> F = [[I, Δt·I], [0, I]],  B = [[½Δt²·I], [Δt·I]],  u = [0, 0, −g]
+>
+> H = I,  R = diag(σp²·I, σv²·I)
 
-To help the filter understand that the threat is falling, the prediction step includes a **gravity bias** on vertical velocity:
+Gravity enters as a known control input, B u, so it moves both the predicted position and the predicted velocity.
 
-```python
-self.x[5] -= g * dt
-```
+**Process noise.** `kalman.q` (m²/s³) is the power spectral density of the white acceleration noise on each axis. Integrating it over one step gives, per axis,
 
-This reduces vertical lag and gives more realistic predicted impact points.
+> Q = q · [[Δt³/3, Δt²/2], [Δt²/2, Δt]]
 
-The filter also exposes a helper like:
+**Update.**
+
+> S = H P⁻ Hᵀ + R,  K = P⁻ Hᵀ S⁻¹
+>
+> x = x⁻ + K ν,  ν = z − H x⁻
+>
+> P = (I − K H) P⁻ (I − K H)ᵀ + K R Kᵀ
+
+K comes from `np.linalg.solve` with S, not an explicit inverse. The Joseph-form covariance update keeps P symmetric and positive definite for any gain, which the short form (I − K H) P⁻ does not guarantee under rounding. The first measurement initializes the state with P₀ = R, the exact covariance of that estimate since H = I.
+
+**Behavior change.** The filter used to subtract g·Δt from vz in place, add Q = 0.1·I every step and start from P₀ = 500·I. With the new filter and q = 30 m²/s³, the recorded legacy seeds keep their outcomes, with kill times within 0.25 s. Over seeds 0–299 the engineering mode kills 178 of 289 engaged threats, up from 174, and still holds fire on 11. The demo still kills 300/300.
+
+#### Consistency: NEES and NIS
+
+Two statistics check whether the filter's covariance describes its actual errors:
+
+> NEES  ε = (x̂ − x)ᵀ P⁻¹ (x̂ − x)
+>
+> NIS  ε_ν = νᵀ S⁻¹ ν
+
+For a consistent filter both are chi-square with 6 degrees of freedom, with mean 6. Averaged over N independent runs, N times the average is chi-square with 6N degrees of freedom, which gives 95 % bounds of [5.08, 7.00] for N = 50. `scripts/filter_consistency.py` runs 50 seeded tracking runs in two settings:
+
+* **Matched model** (left panels): drag off, and the truth driven by noise drawn from the filter's own Q, so the filter's model is exact. The average NEES is 6.11, with 94.3 % of steps inside the bounds. The average NIS is 5.99, with 95.1 % inside. The filter is consistent.
+* **As configured** (right panels): the real threat, which has drag. The average NEES over the whole flight is 5.35, but only 58.9 % of steps are inside. NEES is about 8–9 in the first 15 s, while the threat is fastest and drag is strongest, so the filter is overconfident there. Later it settles near 5, mildly conservative. A single constant q cannot match an unmodeled acceleration that changes this much over the flight.
+
+![Average NEES](docs/figures/nees.png)
+
+![Average NIS](docs/figures/nis.png)
+
+NIS stays inside its bounds in both settings (94.6 % with drag). Because the radar measures velocity directly, the innovations are dominated by R, so NIS hardly reacts to an error in Q. NEES needs the truth, so it only exists in simulation, but it is the sharper test here.
+
+**Choice of q.** For the drag-free model, the right q is the one that matches the truth's noise; the threat has none, so that q would be small. Such a filter is badly overconfident against the dragged threat: with q = 1 m²/s³ the average NEES over the first 30 s is about 200. q = 30 m²/s³ covers the drag on average. Of the values swept (1, 10, 30, 100, 300), it also gave the most kills over seeds 0–299: 163, 175, 178, 177 and 171 respectively.
+
+#### Model mismatch: drag
+
+The truth threat has quadratic drag, but the filter and the impact predictor assume drag-free flight. The mismatch is not corrected. It is measured and documented here.
+
+The predictor solves z(t) = 0 for drag-free ballistic motion from the current estimate, and extrapolates the horizontal position with the current velocity:
 
 ```python
 def predict_impact(self, g):
-    # solve z(t) = 0 assuming ballistic motion
+    # t* = (vz + sqrt(vz^2 + 2 g z)) / g,  PIP = (x + vx t*, y + vy t*)
 ```
 
-which analytically solves for the time when z = 0 and predicts the corresponding ground impact point.
+`scripts/drag_mismatch.py` tracks 100 seeded engineering-mode threats twice, once with drag (as configured) and once without (the control). It compares the predicted impact point and the predicted time to impact with the true ground crossing, binned by the true time to go:
+
+| True time to go | Along-track PIP error (median) | Time-to-impact error (median) |
+| --- | --- | --- |
+| 100 s | +3.8 km | −36 s |
+| 80 s | +1.7 km | −26 s |
+| 60 s | +660 m | −17 s |
+| 40 s | +185 m | −8.9 s |
+| 20 s | +23 m | −2.7 s |
+| 10 s | +3 m | −0.7 s |
+
+In the control, the median along-track error stays within ±10 m from 80 s to go onward, and the time-to-impact error is under 0.01 s. In both cases the median cross-track error is under 10 m.
+
+![PIP bias against time to go](docs/figures/pip_bias.png)
+
+* **Direction.** Drag slows the threat, so extrapolating its current velocity without drag carries it further and brings it down sooner than it really will. The PIP therefore lies downrange of the true impact point, and the predicted time to impact is too short. Drag acts along the velocity, so the bias is almost entirely along-track.
+* **Size.** The bias grows with the remaining flight time. It is about 20 km early in the flight, about 1.7 km at 80 s to go and a few metres in the last 10 s. The control shows that the predictor is unbiased when its model is right, so the bias comes from the prediction model, not from the state estimate.
+* **Effect on the launch decision.** At the first launch opportunity (5 s of track, a median 143 s before impact), the PIP is a median 18 km from the true impact point. In 12 of 100 runs the PIP gate would launch at a threat that lands outside the defended area. In 1 it would hold fire on a threat that lands inside, until the PIP drifts inside on a later step. The control has no wrong calls.
+* **Effect on the replay.** The PIP marker in the replay is this drag-free prediction, so it converges on the true impact point only late in the flight.
+* **No direct effect on guidance.** Proportional navigation steers on the current estimate, not on the predicted impact point.
+
+The drag model itself exaggerates the effect. The drag coefficient is constant with no air-density model, so drag acts at full strength even at 70 km altitude. A dragged threat takes 1.5 to 2 times its nominal flight time to land (median 1.7 over 100 seeds). Two fixes are possible but not implemented. One is to add a ballistic coefficient to the state and estimate it with an extended Kalman filter. The other is to predict the impact by integrating the dragged dynamics forward from the estimate.
 
 ---
 
@@ -448,6 +529,7 @@ Both modes share the same core ideas: Kalman tracking, APN guidance, continuous 
 This is a **learning tool**, not a design or validation environment. Major simplifications include:
 
 * **Aerodynamics** – drag is a simple constant-coefficient model; no Mach dependence, no atmosphere layering.
+* **Estimation model mismatch** – the Kalman filter and the impact predictor assume drag-free flight, while the threat has drag. The predicted impact point is biased downrange, and the filter is overconfident early in the flight (see [Model mismatch: drag](#model-mismatch-drag)).
 * **Propulsion** – constant thrust and Isp, with no pressure or altitude dependence. The kill vehicle's divert budget is a Δv limit, not a propellant mass.
 * **Guidance timing** – the guidance command is held constant over each step. The closed engagement loop therefore converges at first order in dt whatever the integrator, while the vehicle dynamics between commands are integrated at the integrator's order.
 * **Earth Model** – flat Earth with constant gravity; no curvature, rotation, or Coriolis effects.
@@ -467,6 +549,7 @@ Some ideas for future work:
 * Different guidance laws (pure pursuit, augmented PN variants, impact-angle constraints).
 * More realistic radar models (range/azimuth/elevation, update rate, clutter, missed detections).
 * Batch Monte Carlo runs to gather statistics on the probability of kill vs. configuration.
+* Estimate drag in the filter (a ballistic coefficient in an extended Kalman filter), or predict the impact point by integrating the dragged dynamics.
 * Simple GUI front-end to build scenario configs.
 
 ---

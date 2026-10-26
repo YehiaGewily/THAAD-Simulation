@@ -35,8 +35,7 @@ class SensorSettings:
 
 @dataclass(frozen=True)
 class KalmanSettings:
-    q: float           # process-noise variance (diagonal)
-    p0: float          # initial covariance (diagonal)
+    q: float           # m^2/s^3, white-noise acceleration spectral density per axis
 
 
 @dataclass(frozen=True)
@@ -128,7 +127,7 @@ class SimConfig:
             'kv_drag': i.kv_drag, 'pn_gain': i.pn_gain, 'max_g': i.max_g,
             'kill_radius': e.kill_radius, 'kv_divert_dv': i.kv_divert_dv,
             'booster_drag': i.booster_drag, 'threat_drag': self.threat.drag,
-            'kf_q': self.kalman.q, 'kf_p0': self.kalman.p0,
+            'kf_q': self.kalman.q,
             'defended_radius': e.defended_radius,
             # Only the PIP-gated rule treats the track time as a launch gate
             'min_track_time': e.min_track_time if self.pip_gated else None,
