@@ -70,6 +70,7 @@ def run(cfg, rng, console=None):
     outcome = "UNKNOWN"
     kill_info = {}
     launch_pip = None
+    min_sep = None   # closest approach over all steps since launch, from the CPA check
 
     console.print("\n" + "="*60, style="bold blue")
     console.print(f"[bold green]{cfg.title}[/bold green]")
@@ -124,6 +125,7 @@ def run(cfg, rng, console=None):
             i_v = (interceptor.pos - i_p0) / dt
             t_v = (threat.pos - t_p0) / dt
             t_off, d_min = get_cpa(i_p0, i_v, t_p0, t_v, dt)
+            min_sep = d_min if min_sep is None else min(min_sep, d_min)
             if d_min < eng.kill_radius:
                 interceptor.exploded = True
                 k_time  = t + t_off
@@ -200,6 +202,9 @@ def run(cfg, rng, console=None):
         'outcome':         outcome,
         'kill':            kill_info or None,
         'launch_pip':      launch_pip,
+        'launch_time':     interceptor.launch_time if interceptor.launched else None,
+        'min_separation':  min_sep,
+        'divert_dv_used':  interceptor.divert_dv_used,
         'impact':          threat.pos.copy() if outcome in ("GROUND", "NO ENGAGE") else None,
         'g_hist':          interceptor.g_hist,
         'defended_radius': eng.defended_radius,

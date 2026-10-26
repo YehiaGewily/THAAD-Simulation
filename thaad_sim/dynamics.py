@@ -125,7 +125,7 @@ class Interceptor:
             if s.kv_divert_dv is not None:
                 remaining = max(s.kv_divert_dv - self.divert_dv_used, 0.0)
                 kv_cmd, kv_mag = limit_divert(kv_cmd, kv_mag, remaining, t_coast)
-                self.divert_dv_used += kv_mag * t_coast
+            self.divert_dv_used += kv_mag * t_coast
             if t_boost == 0:
                 g_load = kv_mag
             deriv = self._derivative(np.zeros(3), kv_cmd, s.kv_drag, 0.0)

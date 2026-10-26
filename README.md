@@ -46,6 +46,8 @@ From the repository root:
 │   ├── guidance.py             # Proportional navigation, g-limit, divert budget
 │   ├── scenario.py             # Random threat scenarios
 │   ├── engagement.py           # Run loop, launch rule, CPA kill check, outcome and BDA
+│   ├── batch.py                # python -m thaad_sim.batch: N seeded runs in parallel -> CSV
+│   ├── stats.py                # Wilson score interval for outcome rates
 │   ├── replay_viewer.py        # Packs a finished run into a browser replay
 │   └── viewer/replay_template.html  # Three.js replay viewer
 ├── configs/
@@ -55,8 +57,10 @@ From the repository root:
 ├── scripts/
 │   ├── convergence_study.py    # Error vs dt for both integrators
 │   ├── filter_consistency.py   # Average NEES/NIS against chi-square bounds
-│   └── drag_mismatch.py        # Impact-prediction bias from ignoring drag
-├── docs/figures/               # Generated figures (convergence, nees, nis, pip_bias)
+│   ├── drag_mismatch.py        # Impact-prediction bias from ignoring drag
+│   └── summarize.py            # Outcome rates with 95 % CIs and figures for a batch CSV
+├── docs/figures/               # Generated figures
+├── results/                    # Batch CSVs behind the statistics quoted here
 ├── replays/                    # Generated replays (git-ignored)
 ├── older_attempts/             # Scratch & learning experiments
 ├── pyproject.toml
@@ -81,7 +85,7 @@ This is the **primary** mode and the CLI default.
   * The PIP lies inside the defended area (`defended_radius`, 30 km). Threats predicted to land outside it are not engaged (`NO ENGAGE`).
 * Uses continuous collision detection and a tight 10 m kill radius.
 
-Result: **interception is likely but not guaranteed.** Over 300 seeded runs (seeds 0–299), about 60% of engaged threats are killed; the rest exhaust the kill vehicle's divert fuel and miss, and about 4% are held fire because they land outside the defended area.
+Result: **interception is likely but not guaranteed.** Over 1000 seeded runs (seeds 0–999, `results/engineering.csv`), 575 of the 960 engaged threats are killed: **59.9 %** (95 % Wilson CI 56.8–63.0 %, n = 960). All 385 misses had used up the kill vehicle's divert Δv. 40 of the 1000 threats are held fire because they land outside the defended area: **4.0 %** (95 % CI 3.0–5.4 %, n = 1000). See [Batch runs and statistics](#7-batch-runs-and-statistics).
 
 #### `configs/demo.yaml` – Max-Performance Intercept Demo
 
@@ -91,7 +95,7 @@ This mode runs the same code (Kalman, PN guidance, CPA, 3D replay) with more agg
 * Stronger interceptor (220 kN at an Isp of 400 s, an 8.0 s burn, 50 G limit, 30 m kill radius, unlimited divert fuel).
 * Launches as soon as the track is confirmed (3 s) and the threat is descending, without a PIP check.
 
-Result: **high probability of intercept** (300/300 seeded runs, seeds 0–299), visually satisfying trajectories, and big closing velocities. Use this mode for demonstrations or when you want a near-guaranteed hit to study the geometry.
+Result: **high probability of intercept** (1000 of 1000 seeded runs killed, seeds 0–999, `results/demo.csv`; 95 % Wilson CI 99.6–100 %, n = 1000), visually satisfying trajectories, and big closing velocities. Use this mode for demonstrations or when you want a near-guaranteed hit to study the geometry.
 
 ### Older Attempts / Scratch Files
 
@@ -161,6 +165,8 @@ The Kalman filter tests (`tests/test_estimation.py`) check:
 * With drag off and the truth driven by the filter's own Q, the 20-run average NEES and NIS stay inside their chi-square 95 % bounds, and the same check rejects a q that is wrong by a factor of 5.
 * The documented drag mismatch: the filter that passes with drag off fails with drag on, and the drag-free PIP lands beyond the true impact point.
 
+The batch tests (`tests/test_stats.py`, `tests/test_batch.py`) check the Wilson interval against closed forms, published values and its defining score test, and check that the same seeds give the same CSV byte for byte, whether the runs use one worker process or several.
+
 GitHub Actions runs the suite on every push and pull request.
 
 ### 5. Convergence study
@@ -189,7 +195,66 @@ python scripts/drag_mismatch.py
 
 The first runs 50 seeded tracking runs and writes the average NEES and NIS against their chi-square bounds to `docs/figures/nees.png` and `nis.png`. The second runs 100 and writes the impact-prediction bias to `docs/figures/pip_bias.png`. Both take about a minute. [Radar Model & Kalman Filtering](#radar-model--kalman-filtering) discusses the results.
 
-### 7. Watch the replay
+### 7. Batch runs and statistics
+
+```bash
+python -m thaad_sim.batch --config configs/engineering.yaml --n 1000 --seed 0
+```
+
+This runs N seeded engagements on all CPU cores (`--workers` to change) without writing replays, and writes one row per run to `results/<name>.csv`, where the name defaults to the config's file name. Run k uses seed `seed + k`, the same seed `python -m thaad_sim --seed` takes, so any row can be replayed in the browser. Each row holds the seed, the outcome, whether an interceptor was launched, the launch and kill times, kill altitude, closing velocity, closest approach, peak commanded acceleration, divert Δv used, the impact point's range, and the Kalman filter's RMS position and velocity error over the run. Rows come back in seed order whatever the number of workers, so the same seed range gives the same file byte for byte, and a test checks this.
+
+```bash
+python scripts/summarize.py results/engineering.csv
+```
+
+This prints each outcome's share of the runs, the share engaged and the kill rate among engaged threats, each as k / n with a 95 % [Wilson score interval](https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval), then the median and interquartile range of the metrics. It needs the `plot` extra and writes the figures below to `docs/figures/`. Every rate quoted in this README comes from these CSVs, which are committed under `results/`.
+
+| Outcome (engineering, seeds 0–999) | k / n | Rate | 95 % Wilson CI |
+| --- | --- | --- | --- |
+| KILL | 575 / 1000 | 57.5 % | 54.4–60.5 % |
+| GROUND | 385 / 1000 | 38.5 % | 35.5–41.6 % |
+| NO ENGAGE | 40 / 1000 | 4.0 % | 3.0–5.4 % |
+| TIMEOUT | 0 / 1000 | 0.0 % | 0.0–0.4 % |
+| engaged | 960 / 1000 | 96.0 % | 94.6–97.0 % |
+| **KILL among engaged** | **575 / 960** | **59.9 %** | **56.8–63.0 %** |
+
+The demo config kills 1000 / 1000 (95 % CI 99.6–100 %).
+
+![Engineering-mode outcome rates](docs/figures/engineering_outcomes.png)
+
+![Engineering-mode engagement metrics](docs/figures/engineering_metrics.png)
+
+Closest approach is bimodal: kills sit below the 10 m kill radius, and misses spread from about 10 m to 1 km (median 89 m). The divert budget binds: every miss, and 362 of the 575 kills, used all 435 m/s of it. The peak commanded acceleration is either a few g or the 30 g limit.
+
+![Engineering-mode Kalman filter RMS error](docs/figures/engineering_kf_rms.png)
+
+Over a whole run the filter's median RMS 3D error is 3.8 m in position and 3.7 m/s in velocity, against 43.3 m and 13.9 m/s for a single raw radar return (√3 σ for three axes).
+
+**Parameter sweeps.** `--sweep section.field=v1,v2,...` repeats the N runs at each value of one scalar config parameter, with the same seeds at every value, and adds `sweep_param` and `sweep_value` columns:
+
+```bash
+python -m thaad_sim.batch --config configs/engineering.yaml --n 500 --seed 0 --sweep sensor.pos_noise=5,10,25,50,100
+```
+
+```bash
+python scripts/summarize.py results/engineering_sweep_sensor_pos_noise.csv
+```
+
+For a sweep, the summary is printed per value, and the figures are the outcome rates per value and `<name>_sweep.png`: the filter's RMS error and the kill rate against the swept value.
+
+![Filter RMS error and kill rate against radar position noise](docs/figures/engineering_sweep_sensor_pos_noise_sweep.png)
+
+| Radar position noise σ (per axis) | Median filter RMS position error | Kills among engaged (n = 476) | 95 % Wilson CI |
+| --- | --- | --- | --- |
+| 5 m | 1.5 m | 59.9 % | 55.4–64.2 % |
+| 10 m | 2.3 m | 59.9 % | 55.4–64.2 % |
+| 25 m (configured) | 3.8 m | 59.7 % | 55.2–64.0 % |
+| 50 m | 5.8 m | 58.8 % | 54.3–63.2 % |
+| 100 m | 9.4 m | 55.5 % | 51.0–59.9 % |
+
+The filter's position error grows about as σ^0.6, more slowly than the noise, because the radar also measures velocity: velocity noise is unchanged in this sweep, and so is the velocity error (3.6–3.7 m/s). The kill rate barely moves: every interval overlaps the others, and from 5 m to 100 m it drops only 4.4 points. The interceptor misses because of its divert budget, not its track. The same 476 threats are engaged at every noise level.
+
+### 8. Watch the replay
 
 When the run finishes, the terminal prints Rich logs with launch events, kill / fail messages, and a final BDA table. The engagement then opens in your browser as a 3D replay, saved to `replays/replay_<timestamp>.html` under the current folder.
 
@@ -314,7 +379,7 @@ Gravity enters as a known control input, B u, so it moves both the predicted pos
 
 K comes from `np.linalg.solve` with S, not an explicit inverse. The Joseph-form covariance update keeps P symmetric and positive definite for any gain, which the short form (I − K H) P⁻ does not guarantee under rounding. The first measurement initializes the state with P₀ = R, the exact covariance of that estimate since H = I.
 
-**Behavior change.** The filter used to subtract g·Δt from vz in place, add Q = 0.1·I every step and start from P₀ = 500·I. With the new filter and q = 30 m²/s³, the recorded legacy seeds keep their outcomes, with kill times within 0.25 s. Over seeds 0–299 the engineering mode kills 178 of 289 engaged threats, up from 174, and still holds fire on 11. The demo still kills 300/300.
+**Behavior change.** The filter used to subtract g·Δt from vz in place, add Q = 0.1·I every step and start from P₀ = 500·I. With the new filter and q = 30 m²/s³, the recorded legacy seeds keep their outcomes, with kill times within 0.25 s. Over seeds 0–299 the engineering mode kills 178 of 289 engaged threats, up from 174, and still holds fire on 11. The demo still kills 300/300. (These are the first 300 rows of `results/engineering.csv`. [Batch runs and statistics](#7-batch-runs-and-statistics) gives the rates over 1000 seeds with confidence intervals.)
 
 #### Consistency: NEES and NIS
 
@@ -335,7 +400,19 @@ For a consistent filter both are chi-square with 6 degrees of freedom, with mean
 
 NIS stays inside its bounds in both settings (94.6 % with drag). Because the radar measures velocity directly, the innovations are dominated by R, so NIS hardly reacts to an error in Q. NEES needs the truth, so it only exists in simulation, but it is the sharper test here.
 
-**Choice of q.** For the drag-free model, the right q is the one that matches the truth's noise; the threat has none, so that q would be small. Such a filter is badly overconfident against the dragged threat: with q = 1 m²/s³ the average NEES over the first 30 s is about 200. q = 30 m²/s³ covers the drag on average. Of the values swept (1, 10, 30, 100, 300), it also gave the most kills over seeds 0–299: 163, 175, 178, 177 and 171 respectively.
+**Choice of q.** For the drag-free model, the right q is the one that matches the truth's noise; the threat has none, so that q would be small. Such a filter is badly overconfident against the dragged threat: with q = 1 m²/s³ the average NEES over the first 30 s is about 200. q = 30 m²/s³ covers the drag on average. A sweep over seeds 0–999 (`python -m thaad_sim.batch --sweep kalman.q=1,10,30,100,300`, `results/engineering_sweep_kalman_q.csv`) gives:
+
+| q [m²/s³] | Median RMS position error | Median RMS velocity error | Kills among engaged | 95 % Wilson CI |
+| --- | --- | --- | --- | --- |
+| 1 | 10.3 m | 11.4 m/s | 529 / 956 = 55.3 % | 52.2–58.5 % |
+| 10 | 3.9 m | 4.4 m/s | 577 / 959 = 60.2 % | 57.0–63.2 % |
+| **30** | **3.8 m** | **3.7 m/s** | **575 / 960 = 59.9 %** | **56.8–63.0 %** |
+| 100 | 3.7 m | 4.3 m/s | 568 / 961 = 59.1 % | 56.0–62.2 % |
+| 300 | 3.7 m | 5.4 m/s | 553 / 962 = 57.5 % | 54.3–60.6 % |
+
+![Filter RMS error and kill rate against q](docs/figures/engineering_sweep_kalman_q_sweep.png)
+
+The kill rate cannot tell q = 10, 30 and 100 apart: their intervals overlap almost entirely. (Over seeds 0–299 alone, q = 30 had the most kills, 178, but that lead is within the noise.) The filter's error separates them: q = 30 gives the lowest velocity error, and its position error is within 0.1 m of the lowest. Too small a q (1) lags the drag deceleration, and too large a q (300) passes more measurement noise into the velocity.
 
 #### Model mismatch: drag
 
@@ -515,10 +592,10 @@ The BDA values and the 3D replay complement each other, providing both **numbers
 
 ## Modes Summary
 
-| Config                     | Style            | Intercept Guarantee | Notes                                                                               |
-| -------------------------- | ---------------- | ------------------- | ----------------------------------------------------------------------------------- |
-| `configs/engineering.yaml` | Engineering Mode | ~60% of engaged     | Moderate thrust, 30 G, finite divert Δv, 10 m kill radius, PIP-gated launch.       |
-| `configs/demo.yaml`        | Max-Performance  | ~100%               | Strong interceptor, easier threat, launches on track confirmation; good for demos. |
+| Config                     | Style            | Kill rate (seeds 0–999)                          | Notes                                                                               |
+| -------------------------- | ---------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `configs/engineering.yaml` | Engineering Mode | 59.9 % of engaged (95 % CI 56.8–63.0 %, n = 960) | Moderate thrust, 30 G, finite divert Δv, 10 m kill radius, PIP-gated launch.       |
+| `configs/demo.yaml`        | Max-Performance  | 100 % (95 % CI 99.6–100 %, n = 1000)             | Strong interceptor, easier threat, launches on track confirmation; good for demos. |
 
 Both modes share the same core ideas: Kalman tracking, APN guidance, continuous collision detection, and 3D visualisation.
 
@@ -548,7 +625,6 @@ Some ideas for future work:
 * Multiple simultaneous threats and interceptors.
 * Different guidance laws (pure pursuit, augmented PN variants, impact-angle constraints).
 * More realistic radar models (range/azimuth/elevation, update rate, clutter, missed detections).
-* Batch Monte Carlo runs to gather statistics on the probability of kill vs. configuration.
 * Estimate drag in the filter (a ballistic coefficient in an extended Kalman filter), or predict the impact point by integrating the dragged dynamics.
 * Simple GUI front-end to build scenario configs.
 
