@@ -1,7 +1,8 @@
 """Browser replay for a finished engagement.
 
 Packs the history returned by ``run()`` into the Three.js viewer template
-(viewer/replay_template.html) and opens the result in the default browser.
+(thaad_sim/viewer/replay_template.html) and opens the result in the default
+browser. Replays are written to ``replays/`` under the current directory.
 """
 import json
 import time
@@ -10,9 +11,8 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent
-TEMPLATE = ROOT / "viewer" / "replay_template.html"
-OUTPUT_DIR = ROOT / "replays"
+TEMPLATE = Path(__file__).resolve().parent / "viewer" / "replay_template.html"
+OUTPUT_DIR = Path("replays")
 
 STATUS_CODES = {"SEARCH": 0, "FLYING": 1, "HIT": 2}
 STAGE_CODES = {"IDLE": 0, "BOOST": 1, "KV_COAST": 2}
@@ -77,16 +77,19 @@ def build_payload(hist):
         'minTrackTime': meta['min_track_time'],
         'params': {k: float(v) for k, v in meta['params'].items()},
         'seed': meta.get('seed'),
+        'config': meta.get('config'),
+        'legacyRng': bool(meta.get('legacy_rng')),
     }
 
 
-def show_replay(hist, open_browser=True):
+def show_replay(hist, open_browser=True, out_dir=OUTPUT_DIR):
     """Write a self-contained HTML replay of ``hist`` and open it; returns the file path."""
     data = json.dumps(build_payload(hist), separators=(",", ":")).replace("</", "<\\/")
     html = TEMPLATE.read_text(encoding="utf-8").replace("__REPLAY_DATA__", data)
 
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    path = OUTPUT_DIR / f"replay_{time.strftime('%Y%m%d_%H%M%S')}.html"
+    out_dir = Path(out_dir)
+    out_dir.mkdir(exist_ok=True)
+    path = (out_dir / f"replay_{time.strftime('%Y%m%d_%H%M%S')}.html").resolve()
     path.write_text(html, encoding="utf-8")
 
     if open_browser:

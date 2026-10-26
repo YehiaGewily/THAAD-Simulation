@@ -1,0 +1,45 @@
+# Engineering mode (tuned realism): a moderate interceptor with a finite divert
+# budget, scattered aim points, and a launch gated on the predicted impact point.
+title: "THAAD v5.1 | INTERCEPT SIM (TUNED)"
+mode: "ENGINEERING MODE"
+
+sim:
+  dt: 0.02            # s
+  t_max: 150.0        # s, base window; extended to 2 x T_imp + 30 s per scenario
+  g: 9.81             # m/s^2
+
+sensor:
+  pos_noise: 25.0     # m, 1-sigma per axis
+  vel_noise: 8.0      # m/s, 1-sigma per axis
+
+kalman:
+  q: 0.1              # process-noise variance (diagonal)
+  p0: 500.0           # initial covariance (diagonal)
+
+threat:
+  drag: 0.00004       # 1/m, quadratic drag (acceleration per speed^2)
+
+interceptor:
+  boost_thrust: 150000.0  # N
+  boost_time: 5.0         # s
+  mass_wet: 900.0         # kg
+  mass_dry: 450.0         # kg
+  kv_mass: 200.0          # kg
+  kv_drag: 0.00008
+  booster_drag: 0.0001
+  pn_gain: 4.0
+  max_g: 30.0             # g, lateral limit
+  kv_divert_dv: 435.0     # m/s, kill-vehicle divert budget (null = unlimited)
+
+engagement:
+  launch_rule: pip_gated  # launch only if the PIP falls inside defended_radius
+  min_track_time: 5.0     # s of tracking before a launch is allowed
+  defended_radius: 30000.0  # m
+  kill_radius: 10.0       # m
+
+scenario:
+  impact_time: [70.0, 100.0]     # s, nominal time to impact
+  altitude: [55000.0, 75000.0]   # m
+  range: [35000.0, 55000.0]      # m, initial ground range
+  aim_radius: [0.0, 35000.0]     # m, aim-point scatter around the origin (null = aim at origin)
+  drag_comp: 1.03                # launch-velocity boost for drag

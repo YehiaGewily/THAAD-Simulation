@@ -35,21 +35,33 @@ From the repository root:
 
 ```text
 .
-├── THAAD MAX_performance prototype.py   # v5.0 – "Max-Performance" / High-Margin Mode
-├── THAAD Ultimlate Prototype.py         # v5.1 – "Engineering Mode" / Tuned Realism
-├── replay_viewer.py                     # Packs a finished run into a browser replay
-├── viewer/replay_template.html          # Three.js replay viewer
-├── replays/                             # Generated replays (git-ignored)
-├── older_attempts/                      # Scratch & learning experiments
-│   └── ... (early prototypes, tests, etc.)
+├── thaad_sim/                  # The simulation package
+│   ├── __main__.py             # CLI: python -m thaad_sim --config ... --seed ...
+│   ├── config.py               # SimConfig dataclasses, loaded from YAML
+│   ├── dynamics.py             # Ballistic threat and two-stage interceptor
+│   ├── estimation.py           # 6-state Kalman filter
+│   ├── guidance.py             # Proportional navigation, g-limit, divert budget
+│   ├── scenario.py             # Random threat scenarios
+│   ├── engagement.py           # Run loop, launch rule, CPA kill check, outcome and BDA
+│   ├── replay_viewer.py        # Packs a finished run into a browser replay
+│   └── viewer/replay_template.html  # Three.js replay viewer
+├── configs/
+│   ├── engineering.yaml        # Engineering mode (tuned realism)
+│   └── demo.yaml               # Max-performance demo
+├── tests/                      # pytest suite
+├── replays/                    # Generated replays (git-ignored)
+├── older_attempts/             # Scratch & learning experiments
+├── pyproject.toml
 └── README.md
 ```
 
-### Main simulation files
+Both modes run the same code. Everything that differs between them lives in the YAML config: the interceptor's numbers, whether the kill vehicle has a divert budget (`interceptor.kv_divert_dv`, `null` for unlimited), the launch rule (`engagement.launch_rule`: `pip_gated` or `fire_on_track`), and the scenario ranges (`scenario.*`, with `aim_radius: null` aiming every threat at the origin).
 
-#### `THAAD Ultimlate Prototype.py` – Engineering Mode (Tuned Realism)
+### Modes
 
-This is the **primary** simulation to run.
+#### `configs/engineering.yaml` – Engineering Mode (Tuned Realism)
+
+This is the **primary** mode and the CLI default.
 
 * Uses randomized threat geometry (55–75 km altitude, 35–55 km range, any azimuth) with the aim point scattered up to 35 km from the defended origin.
 * Simulates a two-stage interceptor with moderate thrust (150 kN for 5 s), a 30 G limit, and a kill vehicle with a finite **divert Δv budget** (435 m/s).
@@ -61,66 +73,76 @@ This is the **primary** simulation to run.
   * The PIP lies inside the defended area (`defended_radius`, 30 km). Threats predicted to land outside it are not engaged (`NO ENGAGE`).
 * Uses continuous collision detection and a tight 10 m kill radius.
 
-Result: **interception is likely but not guaranteed.** Over 300 seeded runs, about 64% of engaged threats are killed; the rest exhaust the kill vehicle's divert fuel and miss, and about 4% are held fire because they land outside the defended area.
+Result: **interception is likely but not guaranteed.** Over 300 seeded runs (seeds 0–299), about 61% of engaged threats are killed; the rest exhaust the kill vehicle's divert fuel and miss, and about 4% are held fire because they land outside the defended area.
 
-#### `THAAD MAX_performance prototype.py` – Max-Performance Intercept Demo
+#### `configs/demo.yaml` – Max-Performance Intercept Demo
 
-This mode shares the same architecture (Kalman, PN guidance, CPA, 3D replay), but with more aggressive tuning:
+This mode runs the same code (Kalman, PN guidance, CPA, 3D replay) with more aggressive tuning:
 
 * Easier threat profiles (40–60 km altitude, 25–40 km range, always aimed at the origin, with mild drag compensation).
 * Stronger interceptor (220 kN for 8 s, 50 G limit, 30 m kill radius, unlimited divert fuel).
 * Launches as soon as the track is confirmed (3 s) and the threat is descending, without a PIP check.
 
-Result: **high probability of intercept** (300/300 seeded runs), visually satisfying trajectories, and big closing velocities. Use this mode for demonstrations or when you want a near-guaranteed hit to study the geometry.
+Result: **high probability of intercept** (300/300 seeded runs, seeds 0–299), visually satisfying trajectories, and big closing velocities. Use this mode for demonstrations or when you want a near-guaranteed hit to study the geometry.
 
 ### Older Attempts / Scratch Files
 
-The `Older Attempts/` folder and early scripts (e.g. `THAAD Simulation Prototype.py`) are **scratch and learning experiments**. They were used to:
+The `older_attempts/` folder holds **scratch and learning experiments**. They were used to:
 
 * Test basic ballistic motion and drag.
 * Prototype simple PN interceptors.
 * Play with Matplotlib 3D visualization and animation.
 
-They are kept for historical context and quick reference, but the main work now happens in:
-
-* `THAAD Ultimlate Prototype.py`
-* `THAAD MAX_performance prototype.py`
+They are kept for historical context and are not used by the `thaad_sim` package.
 
 ---
 
 ## Quick Start
 
-### 1. Install requirements
+### 1. Install
 
-You need Python 3.9+ and the following packages:
+You need Python 3.9+. From the project folder:
 
 ```bash
-pip install numpy rich
+pip install -e ".[dev]"
 ```
 
-The 3D replay runs in your web browser and loads Three.js from a CDN, so the first run needs an internet connection.
+This installs numpy, rich and pyyaml, plus pytest for the tests. The 3D replay runs in your web browser and loads Three.js from a CDN, so the first run needs an internet connection.
 
 ### 2. Run the engineering mode (recommended)
 
 ```bash
-python "THAAD Ultimlate Prototype.py"
+python -m thaad_sim --config configs/engineering.yaml
 ```
 
 ### 3. Run the max-performance demo
 
 ```bash
-python "THAAD MAX_performance prototype.py"
+python -m thaad_sim --config configs/demo.yaml
 ```
 
-Each run uses a random seed and prints it. To repeat a scenario exactly, pass the seed:
+Each run uses a random seed and prints it. A run is a pure function of the config and the seed, so passing the seed repeats the scenario exactly:
 
 ```bash
-python "THAAD Ultimlate Prototype.py" 1271439923
+python -m thaad_sim --config configs/engineering.yaml --seed 123
 ```
 
-### 4. Watch the replay
+Other options:
 
-When the run finishes, the terminal prints Rich logs with launch events, kill / fail messages, and a final BDA table. The engagement then opens in your browser as a 3D replay, saved to `replays/replay_<timestamp>.html`.
+* `--no-browser` writes the replay file without opening it.
+* `--legacy-rng` draws random numbers the way the old single-file scripts (`THAAD Ultimlate Prototype.py`, `THAAD MAX_performance prototype.py`) did, so a seed they printed replays the same scenario. Without it, the same seed number gives a different scenario.
+
+### 4. Run the tests
+
+```bash
+python -m pytest
+```
+
+The suite checks that a fixed seed gives identical runs, that the package reproduces the outcome and kill time the old scripts produced for a set of recorded seeds (`tests/data/legacy_baselines.json`), the CPA function, config loading, and the CLI. GitHub Actions runs it on every push and pull request.
+
+### 5. Watch the replay
+
+When the run finishes, the terminal prints Rich logs with launch events, kill / fail messages, and a final BDA table. The engagement then opens in your browser as a 3D replay, saved to `replays/replay_<timestamp>.html` under the current folder.
 
 The replay includes:
 
@@ -349,7 +371,7 @@ Possible outcomes:
 
 * `KILL` – interceptor successfully hits the threat within the kill radius.
 * `GROUND` – threat impacts the ground (z = 0) before intercept.
-* `NO ENGAGE` – (Engineering Mode only) the PIP was never inside the defended area, so no interceptor was launched and the threat landed outside it.
+* `NO ENGAGE` – (`pip_gated` launch rule only, i.e. Engineering Mode) the PIP was never inside the defended area, so no interceptor was launched and the threat landed outside it.
 * `TIMEOUT` – simulation time ends while the threat is still airborne and not yet killed.
 
 The BDA values and the 3D replay complement each other, providing both **numbers** and **geometry**.
@@ -358,10 +380,10 @@ The BDA values and the 3D replay complement each other, providing both **numbers
 
 ## Modes Summary
 
-| Mode / File                          | Style            | Intercept Guarantee | Notes                                                                                   |
-| ------------------------------------ | ---------------- | ------------------- | --------------------------------------------------------------------------------------- |
-| `THAAD Ultimlate Prototype.py`       | Engineering Mode | ~64% of engaged     | Moderate thrust, 30 G, finite divert Δv, 10 m kill radius, PIP-gated launch.           |
-| `THAAD MAX_performance prototype.py` | Max-Performance  | ~100%               | Strong interceptor, easier threat, launches on track confirmation; good for demos.     |
+| Config                     | Style            | Intercept Guarantee | Notes                                                                               |
+| -------------------------- | ---------------- | ------------------- | ----------------------------------------------------------------------------------- |
+| `configs/engineering.yaml` | Engineering Mode | ~61% of engaged     | Moderate thrust, 30 G, finite divert Δv, 10 m kill radius, PIP-gated launch.       |
+| `configs/demo.yaml`        | Max-Performance  | ~100%               | Strong interceptor, easier threat, launches on track confirmation; good for demos. |
 
 Both modes share the same core ideas: Kalman tracking, APN guidance, continuous collision detection, and 3D visualisation.
 
@@ -389,6 +411,6 @@ Some ideas for future work:
 * Different guidance laws (pure pursuit, augmented PN variants, impact-angle constraints).
 * More realistic radar models (range/azimuth/elevation, update rate, clutter, missed detections).
 * Batch Monte Carlo runs to gather statistics on the probability of kill vs. configuration.
-* Simple GUI front-end to let users configure scenarios without editing code.
+* Simple GUI front-end to build scenario configs.
 
 ---

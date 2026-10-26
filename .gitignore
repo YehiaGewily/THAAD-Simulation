@@ -1,2 +1,3 @@
 replays/
 __pycache__/
+*.egg-info/

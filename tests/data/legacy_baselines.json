@@ -1,0 +1,57 @@
+{
+  "_source": "Captured from the pre-package scripts at commit 7e1fd60 with np.random.seed(seed).",
+  "engineering": {
+    "script": "THAAD Ultimlate Prototype.py",
+    "runs": {
+      "0": {
+        "outcome": "KILL",
+        "kill_time": 56.960000000003305
+      },
+      "1": {
+        "outcome": "KILL",
+        "kill_time": 52.41101361339111
+      },
+      "3": {
+        "outcome": "GROUND",
+        "kill_time": null
+      },
+      "7": {
+        "outcome": "NO ENGAGE",
+        "kill_time": null
+      },
+      "9": {
+        "outcome": "KILL",
+        "kill_time": 50.69812663157252
+      },
+      "30": {
+        "outcome": "NO ENGAGE",
+        "kill_time": null
+      }
+    }
+  },
+  "demo": {
+    "script": "THAAD MAX_performance prototype.py",
+    "runs": {
+      "0": {
+        "outcome": "KILL",
+        "kill_time": 28.47999999999948
+      },
+      "1": {
+        "outcome": "KILL",
+        "kill_time": 26.879009745484037
+      },
+      "2": {
+        "outcome": "KILL",
+        "kill_time": 25.179999999999552
+      },
+      "5": {
+        "outcome": "KILL",
+        "kill_time": 27.459894317746787
+      },
+      "7": {
+        "outcome": "KILL",
+        "kill_time": 27.159925939951826
+      }
+    }
+  }
+}

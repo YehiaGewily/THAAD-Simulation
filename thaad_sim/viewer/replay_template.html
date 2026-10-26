@@ -1944,7 +1944,7 @@ function fmtParam(v) {
   if (a < 1e-2) { const e = Math.floor(Math.log10(a)); return `${+(v / 10 ** e).toFixed(2)} × 10<sup>${e}</sup>`; }
   return v.toLocaleString('en-US', { maximumSignificantDigits: 6 });
 }
-const SCRIPT_NAMES = { 'ENGINEERING MODE': 'THAAD Ultimlate Prototype.py', 'MAX-PERFORMANCE MODE': 'THAAD MAX_performance prototype.py' };
+const DEFAULT_CONFIGS = { 'ENGINEERING MODE': 'configs/engineering.yaml', 'MAX-PERFORMANCE MODE': 'configs/demo.yaml' };
 
 function buildMethods() {
   const p = PRM;
@@ -1973,8 +1973,9 @@ function buildMethods() {
     ['t_max', String.raw`t_{max}`, 'Base simulation window', 's'],
   ].filter(([k]) => p[k] != null);
 
-  const script = SCRIPT_NAMES[D.mode] ?? 'THAAD Ultimlate Prototype.py';
-  const cmd = D.seed != null ? `python "${script}" ${D.seed}` : '';
+  const config = D.config ?? DEFAULT_CONFIGS[D.mode] ?? 'configs/engineering.yaml';
+  const configArg = /\s/.test(config) ? `"${config}"` : config;
+  const cmd = D.seed != null ? `python -m thaad_sim --config ${configArg} --seed ${D.seed}${D.legacyRng ? ' --legacy-rng' : ''}` : '';
   const sections = [
     ['Frame and integration', `
       <p>Flat-Earth east–north–up frame (x east, y north, z up) in SI units, constant gravity. Both bodies are integrated with semi-implicit Euler at Δt = ${p.dt} s: velocity is updated first, then position with the new velocity.</p>`],
