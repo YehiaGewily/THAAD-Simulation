@@ -60,7 +60,7 @@ def run(cfg, rng, console=None):
         f"[dim]Scenario: {sc.altitude/1000:.1f} km alt, {sc.range/1000:.1f} km range, "
         f"aim {sc.aim_radius/1000:.1f} km from origin, T_imp~{sc.impact_time:.1f} s[/dim]"
     )
-    interceptor = Interceptor([0, 0, 0], cfg.interceptor, g)
+    interceptor = Interceptor([0, 0, 0], cfg.interceptor, g, cfg.sim.integrator)
     kf = KalmanFilter(dt, cfg.sensor.pos_noise, cfg.sensor.vel_noise, cfg.kalman.q, cfg.kalman.p0, g)
 
     t_max = max(cfg.sim.t_max, sc.impact_time * 2.0 + 30.0)
@@ -116,7 +116,10 @@ def run(cfg, rng, console=None):
         interceptor.update(t, ep, ev, dt)
         threat.update(dt)
 
-        # Kill check: CPA between both straight-line segments over the same step
+        # Kill check: CPA between both straight-line segments over the same step.
+        # The segments are the chords between the integrator's step endpoints,
+        # so this works the same for any integrator; the chord departs from the
+        # curved path by about a*dt^2/8 (a few cm at dt = 0.02 s).
         if interceptor.launched and not interceptor.exploded:
             i_v = (interceptor.pos - i_p0) / dt
             t_v = (threat.pos - t_p0) / dt
@@ -193,6 +196,7 @@ def run(cfg, rng, console=None):
         'title':           cfg.title,
         'mode':            cfg.mode,
         'engage_rule':     cfg.engage_rule_label,
+        'integrator':      cfg.sim.integrator,
         'outcome':         outcome,
         'kill':            kill_info or None,
         'launch_pip':      launch_pip,

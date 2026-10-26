@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -46,16 +47,32 @@ LEGACY_CASES = [
 ]
 
 
+# The legacy scripts used semi-implicit Euler and a linear mass ramp. With RK4
+# and the Isp mass model the same seed gives the same scenario and noise, and
+# the engagement plays out the same way to within a small shift in kill time.
+LEGACY_KILL_TIME_TOL = 0.25  # s
+
+
 @pytest.mark.parametrize("mode,seed,outcome,kill_time", LEGACY_CASES,
                          ids=[f"{m}-{s}" for m, s, _, _ in LEGACY_CASES])
-def test_reproduces_legacy_scripts(mode, seed, outcome, kill_time, quiet):
+def test_matches_legacy_scripts(mode, seed, outcome, kill_time, quiet):
     hist = simulate(load_config(CONFIGS[mode]), seed, legacy_rng=True, console=quiet)
     meta = hist['meta']
     assert meta['outcome'] == outcome
     if kill_time is None:
         assert meta['kill'] is None
     else:
-        assert meta['kill']['time'] == pytest.approx(kill_time, rel=0, abs=1e-9)
+        assert meta['kill']['time'] == pytest.approx(kill_time, rel=0, abs=LEGACY_KILL_TIME_TOL)
+
+
+@pytest.mark.parametrize("integrator", ["euler", "rk4"])
+def test_cpa_kill_check_works_with_each_integrator(integrator, quiet):
+    cfg = load_config(CONFIGS["demo"])
+    cfg = replace(cfg, sim=replace(cfg.sim, integrator=integrator))
+    meta = simulate(cfg, 0, legacy_rng=True, console=quiet)['meta']
+    assert meta['outcome'] == "KILL"
+    assert meta['integrator'] == integrator
+    assert meta['kill']['dist'] < cfg.engagement.kill_radius
 
 
 def test_baselines_cover_every_outcome():

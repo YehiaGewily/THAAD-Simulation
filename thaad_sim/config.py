@@ -7,10 +7,14 @@ from typing import Optional, Tuple
 
 import yaml
 
+from .integrators import INTEGRATORS
+
 LAUNCH_RULES = ("pip_gated", "fire_on_track")
 
 # Engagement-rule labels shown in the terminal and the replay viewer
 ENGAGE_RULE_LABELS = {"pip_gated": "PIP-GATED LAUNCH", "fire_on_track": "FIRE ON TRACK"}
+
+STANDARD_GRAVITY = 9.80665  # m/s^2, the g0 in the definition of specific impulse
 
 Range = Tuple[float, float]
 
@@ -18,6 +22,7 @@ Range = Tuple[float, float]
 @dataclass(frozen=True)
 class SimSettings:
     dt: float          # s, integration step
+    integrator: str    # "rk4" or "euler"
     t_max: float       # s, base window (extended per scenario)
     g: float           # m/s^2
 
@@ -42,15 +47,25 @@ class ThreatSettings:
 @dataclass(frozen=True)
 class InterceptorSettings:
     boost_thrust: float            # N
-    boost_time: float              # s
-    mass_wet: float                # kg
-    mass_dry: float                # kg
+    isp: float                     # s, booster specific impulse
+    mass_wet: float                # kg, at launch
+    mass_dry: float                # kg, at burnout (propellant = wet - dry)
     kv_mass: float                 # kg
     kv_drag: float                 # kill-vehicle quadratic drag coefficient
     booster_drag: float            # booster quadratic drag coefficient
     pn_gain: float
     max_g: float                   # lateral acceleration limit, g
     kv_divert_dv: Optional[float]  # m/s divert budget; None = unlimited
+
+    @property
+    def mass_flow(self):
+        """kg/s of propellant burned during boost: mdot = F / (Isp g0)."""
+        return self.boost_thrust / (self.isp * STANDARD_GRAVITY)
+
+    @property
+    def burn_time(self):
+        """s until the propellant (mass_wet - mass_dry) is spent."""
+        return (self.mass_wet - self.mass_dry) / self.mass_flow
 
 
 @dataclass(frozen=True)
@@ -83,6 +98,12 @@ class SimConfig:
     scenario: ScenarioSettings
 
     def __post_init__(self):
+        if self.sim.integrator not in INTEGRATORS:
+            raise ValueError(f"sim.integrator must be one of {INTEGRATORS}, "
+                             f"got {self.sim.integrator!r}")
+        i = self.interceptor
+        if i.isp <= 0 or i.boost_thrust <= 0 or i.mass_wet <= i.mass_dry:
+            raise ValueError("interceptor needs isp > 0, boost_thrust > 0 and mass_wet > mass_dry")
         if self.engagement.launch_rule not in LAUNCH_RULES:
             raise ValueError(f"engagement.launch_rule must be one of {LAUNCH_RULES}, "
                              f"got {self.engagement.launch_rule!r}")
@@ -101,7 +122,8 @@ class SimConfig:
         p = {
             'dt': self.sim.dt, 't_max': self.sim.t_max, 'g': self.sim.g,
             'pos_noise': self.sensor.pos_noise, 'vel_noise': self.sensor.vel_noise,
-            'boost_thrust': i.boost_thrust, 'boost_time': i.boost_time,
+            'boost_thrust': i.boost_thrust, 'isp': i.isp,
+            'mass_flow': i.mass_flow, 'burn_time': i.burn_time,
             'mass_wet': i.mass_wet, 'mass_dry': i.mass_dry, 'kv_mass': i.kv_mass,
             'kv_drag': i.kv_drag, 'pn_gain': i.pn_gain, 'max_g': i.max_g,
             'kill_radius': e.kill_radius, 'kv_divert_dv': i.kv_divert_dv,

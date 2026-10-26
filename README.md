@@ -39,6 +39,8 @@ From the repository root:
 │   ├── __main__.py             # CLI: python -m thaad_sim --config ... --seed ...
 │   ├── config.py               # SimConfig dataclasses, loaded from YAML
 │   ├── dynamics.py             # Ballistic threat and two-stage interceptor
+│   ├── integrators.py          # integrate(state, deriv_fn, dt): forward Euler and RK4
+│   ├── verification.py         # Reference problems for the integrator tests and study
 │   ├── estimation.py           # 6-state Kalman filter
 │   ├── guidance.py             # Proportional navigation, g-limit, divert budget
 │   ├── scenario.py             # Random threat scenarios
@@ -49,13 +51,15 @@ From the repository root:
 │   ├── engineering.yaml        # Engineering mode (tuned realism)
 │   └── demo.yaml               # Max-performance demo
 ├── tests/                      # pytest suite
+├── scripts/convergence_study.py  # Error vs dt for both integrators
+├── docs/figures/               # Generated figures (convergence.png)
 ├── replays/                    # Generated replays (git-ignored)
 ├── older_attempts/             # Scratch & learning experiments
 ├── pyproject.toml
 └── README.md
 ```
 
-Both modes run the same code. Everything that differs between them lives in the YAML config: the interceptor's numbers, whether the kill vehicle has a divert budget (`interceptor.kv_divert_dv`, `null` for unlimited), the launch rule (`engagement.launch_rule`: `pip_gated` or `fire_on_track`), and the scenario ranges (`scenario.*`, with `aim_radius: null` aiming every threat at the origin).
+Both modes run the same code. Everything that differs between them lives in the YAML config: the integrator (`sim.integrator`: `rk4`, the default, or `euler`), the interceptor's numbers, whether the kill vehicle has a divert budget (`interceptor.kv_divert_dv`, `null` for unlimited), the launch rule (`engagement.launch_rule`: `pip_gated` or `fire_on_track`), and the scenario ranges (`scenario.*`, with `aim_radius: null` aiming every threat at the origin).
 
 ### Modes
 
@@ -64,7 +68,7 @@ Both modes run the same code. Everything that differs between them lives in the 
 This is the **primary** mode and the CLI default.
 
 * Uses randomized threat geometry (55–75 km altitude, 35–55 km range, any azimuth) with the aim point scattered up to 35 km from the defended origin.
-* Simulates a two-stage interceptor with moderate thrust (150 kN for 5 s), a 30 G limit, and a kill vehicle with a finite **divert Δv budget** (435 m/s).
+* Simulates a two-stage interceptor with moderate thrust (150 kN at an Isp of 170 s, which burns its 450 kg of propellant in 5.0 s), a 30 G limit, and a kill vehicle with a finite **divert Δv budget** (435 m/s).
 * Applies a 6-state Kalman Filter with gravity bias to track the threat.
 * Computes a **Predicted Impact Point (PIP)** and launches only when:
 
@@ -73,14 +77,14 @@ This is the **primary** mode and the CLI default.
   * The PIP lies inside the defended area (`defended_radius`, 30 km). Threats predicted to land outside it are not engaged (`NO ENGAGE`).
 * Uses continuous collision detection and a tight 10 m kill radius.
 
-Result: **interception is likely but not guaranteed.** Over 300 seeded runs (seeds 0–299), about 61% of engaged threats are killed; the rest exhaust the kill vehicle's divert fuel and miss, and about 4% are held fire because they land outside the defended area.
+Result: **interception is likely but not guaranteed.** Over 300 seeded runs (seeds 0–299), about 60% of engaged threats are killed; the rest exhaust the kill vehicle's divert fuel and miss, and about 4% are held fire because they land outside the defended area.
 
 #### `configs/demo.yaml` – Max-Performance Intercept Demo
 
 This mode runs the same code (Kalman, PN guidance, CPA, 3D replay) with more aggressive tuning:
 
 * Easier threat profiles (40–60 km altitude, 25–40 km range, always aimed at the origin, with mild drag compensation).
-* Stronger interceptor (220 kN for 8 s, 50 G limit, 30 m kill radius, unlimited divert fuel).
+* Stronger interceptor (220 kN at an Isp of 400 s, an 8.0 s burn, 50 G limit, 30 m kill radius, unlimited divert fuel).
 * Launches as soon as the track is confirmed (3 s) and the threat is descending, without a PIP check.
 
 Result: **high probability of intercept** (300/300 seeded runs, seeds 0–299), visually satisfying trajectories, and big closing velocities. Use this mode for demonstrations or when you want a near-guaranteed hit to study the geometry.
@@ -138,9 +142,30 @@ Other options:
 python -m pytest
 ```
 
-The suite checks that a fixed seed gives identical runs, that the package reproduces the outcome and kill time the old scripts produced for a set of recorded seeds (`tests/data/legacy_baselines.json`), the CPA function, config loading, and the CLI. GitHub Actions runs it on every push and pull request.
+The suite checks that a fixed seed gives identical runs, that the package matches the outcome and kill time (within 0.25 s) the old scripts produced for a set of recorded seeds (`tests/data/legacy_baselines.json`), the CPA function, config loading, and the CLI. It also verifies the numerics (`tests/test_integrators.py`):
 
-### 5. Watch the replay
+* With drag off, RK4 matches the closed-form ballistic solution to rounding, and forward Euler's error is exactly its truncation error, g·t·dt/2 in altitude.
+* With drag off, RK4 conserves energy; with drag on, the energy lost equals the drag work ∫k‖v‖³dt.
+* At dt, dt/2, dt/4 and dt/8 the observed convergence order is about 1 for Euler and about 4 for RK4, for both the dragged threat and an interceptor flying through burnout.
+* The interceptor's mass falls at F/(Isp·g₀), the booster separates at burnout, and the burn adds the rocket-equation Δv.
+
+GitHub Actions runs the suite on every push and pull request.
+
+### 5. Convergence study
+
+```bash
+pip install -e ".[plot]"
+```
+
+```bash
+python scripts/convergence_study.py
+```
+
+This runs the same reference problems and writes a log-log plot of error against dt for both integrators, with slope-1 and slope-4 reference lines, to `docs/figures/convergence.png`:
+
+![Integrator convergence](docs/figures/convergence.png)
+
+### 6. Watch the replay
 
 When the run finishes, the terminal prints Rich logs with launch events, kill / fail messages, and a final BDA table. The engagement then opens in your browser as a 3D replay, saved to `replays/replay_<timestamp>.html` under the current folder.
 
@@ -193,6 +218,35 @@ Vehicle models are drawn about 8× real size so they can be seen in the close-up
 * Gravity is constant: `g = 9.81 m/s²`.
 
 Earth curvature, rotation, and detailed atmosphere models are ignored, which is acceptable for terminal engagements on the order of tens of kilometers.
+
+---
+
+### Numerical Integration
+
+Each body keeps its state in one array and advances it with a single function, `integrate(state, deriv_fn, dt, method)` in `thaad_sim/integrators.py`:
+
+* Threat state: `[x, y, z, vx, vy, vz]`.
+* Interceptor state: `[x, y, z, vx, vy, vz, m]`, so the interceptor's mass is integrated together with its motion.
+
+`deriv_fn` returns dx/dt for the body's equations of motion. Two methods are available, chosen by `sim.integrator` in the config:
+
+* **`rk4`** (the default): classical fourth-order Runge–Kutta.
+
+  > k1 = f(x), k2 = f(x + dt/2·k1), k3 = f(x + dt/2·k2), k4 = f(x + dt·k3)
+  >
+  > x ← x + dt/6 · (k1 + 2k2 + 2k3 + k4)
+
+  The global error falls as dt⁴.
+* **`euler`**: forward Euler, `x ← x + dt·f(x)`. The global error falls as dt.
+
+Inputs that are not part of the state are held constant over a step. Guidance runs once per step at a fixed rate, as a flight computer would, and its command is held over the step. Burnout is a discontinuity, since thrust stops and the booster separates. The step that contains it is split at the burnout time, so the cutoff happens at the right instant and RK4 keeps its fourth order. The convergence study and `tests/test_integrators.py` measure these orders.
+
+**Behavior change.** Before the `integrate()` abstraction, both bodies used semi-implicit Euler, and interceptor mass followed a fixed linear ramp over a configured `boost_time`. Now:
+
+* The default integrator is RK4.
+* `boost_time` is replaced by `isp`. Each mode's Isp gives nearly the same burn time and total impulse as before: 5.00 s instead of 5 s for engineering, 8.02 s instead of 8 s for the demo.
+
+So a given seed flies a slightly different trajectory than before. The scenario and the sensor noise are unchanged, and the recorded legacy seeds keep their outcomes, with kill times within 0.25 s. Over seeds 0–299 the engineering mode now kills 174 of 289 engaged threats, down from 175, and still holds fire on 11; the demo still kills 300/300.
 
 ---
 
@@ -267,24 +321,24 @@ The interceptor is modeled as a two-stage vehicle:
 
 1. **BOOST stage**
 
-   * Time-limited rocket burn (`boost_time`).
-   * Thrust magnitude (`boost_thrust`).
-   * Mass decreases linearly from `mass_wet` to `mass_dry`.
+   * Constant thrust magnitude (`boost_thrust`) with a specific impulse (`isp`).
+   * The propellant mass flow follows from thrust and Isp, ṁ = F / (Isp · g₀) with g₀ = 9.80665 m/s². Mass is a state variable integrated with dm/dt = −ṁ.
+   * The burn lasts until the propellant (`mass_wet − mass_dry`) is spent, so the burn time is derived rather than configured: t_b = (mass_wet − mass_dry) · Isp · g₀ / F.
    * Drag uses a "booster" coefficient.
    * Maneuver commands are partially applied (e.g. 10%) on top of thrust to mimic limited thrust-vectoring.
 
 2. **KV_COAST stage**
 
-   * After burnout, the booster is gone; mass is set to `kv_mass`.
+   * At burnout the booster separates and the mass state jumps to `kv_mass`.
    * No main thrust (pure coast).
    * Drag uses a separate smaller `kv_drag` coefficient.
-   * Maneuver commands represent kill-vehicle divert thrusters.
+   * Maneuver commands represent kill-vehicle divert thrusters. The divert budget is a Δv limit (`kv_divert_dv`). The kill vehicle's mass stays at `kv_mass`, because divert propellant is not modeled.
 
 Internally, the forces on the interceptor are:
 
 > F_total = F_thrust + F_grav + F_drag + F_maneuver
 
-and acceleration is a = F_total / m. Mass is updated during boost to reflect fuel burn.
+and acceleration is a = F_total / m, with m taken from the integrated state. With gravity and drag off, the burn reproduces the rocket equation, Δv = Isp · g₀ · ln(mass_wet / mass_dry), and a test checks this.
 
 ---
 
@@ -336,7 +390,7 @@ would miss collisions because the objects may "jump over" each other between fra
 
 To fix this, the simulation uses **Closest Point of Approach (CPA)** over each time step:
 
-1- Both bodies are first propagated over the same step, from t to t + dt. Using their positions at t, let Δp = p2 - p1, and Δv = v2 - v1, where each v is that body's displacement over the step divided by dt.
+1- Both bodies are first propagated over the same step, from t to t + dt, by the configured integrator. Using their positions at t, let Δp = p2 - p1, and Δv = v2 - v1, where each v is that body's displacement over the step divided by dt. The check therefore uses the chord between the integrator's step endpoints, and works the same for RK4 and Euler. The chord departs from the curved path by at most a·dt²/8, about 1.5 cm at 30 G and dt = 0.02 s.
 2- The time of minimum separation (assuming linear motion over the step) is:
 
 > t_min = - (Δp · Δv) / |Δv|²
@@ -382,7 +436,7 @@ The BDA values and the 3D replay complement each other, providing both **numbers
 
 | Config                     | Style            | Intercept Guarantee | Notes                                                                               |
 | -------------------------- | ---------------- | ------------------- | ----------------------------------------------------------------------------------- |
-| `configs/engineering.yaml` | Engineering Mode | ~61% of engaged     | Moderate thrust, 30 G, finite divert Δv, 10 m kill radius, PIP-gated launch.       |
+| `configs/engineering.yaml` | Engineering Mode | ~60% of engaged     | Moderate thrust, 30 G, finite divert Δv, 10 m kill radius, PIP-gated launch.       |
 | `configs/demo.yaml`        | Max-Performance  | ~100%               | Strong interceptor, easier threat, launches on track confirmation; good for demos. |
 
 Both modes share the same core ideas: Kalman tracking, APN guidance, continuous collision detection, and 3D visualisation.
@@ -394,6 +448,8 @@ Both modes share the same core ideas: Kalman tracking, APN guidance, continuous 
 This is a **learning tool**, not a design or validation environment. Major simplifications include:
 
 * **Aerodynamics** – drag is a simple constant-coefficient model; no Mach dependence, no atmosphere layering.
+* **Propulsion** – constant thrust and Isp, with no pressure or altitude dependence. The kill vehicle's divert budget is a Δv limit, not a propellant mass.
+* **Guidance timing** – the guidance command is held constant over each step. The closed engagement loop therefore converges at first order in dt whatever the integrator, while the vehicle dynamics between commands are integrated at the integrator's order.
 * **Earth Model** – flat Earth with constant gravity; no curvature, rotation, or Coriolis effects.
 * **Sensors** – radar is treated as a perfect 3D position/velocity sensor with Gaussian noise; real systems work in range/angle space, with clutter, dropouts, and fusion from multiple sensors.
 * **Guidance** – classic PN with a simple gravity bias; real guidance laws include many more constraints and details.

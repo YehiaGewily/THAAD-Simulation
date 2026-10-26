@@ -47,5 +47,5 @@ def spawn_threat(cfg, rng):
 
     vel0 = np.array([vx0, vy0, vz0]) * s.drag_comp
 
-    threat = BallisticThreat([x0, y0, z0], vel0, cfg.threat.drag, g)
+    threat = BallisticThreat([x0, y0, z0], vel0, cfg.threat.drag, g, cfg.sim.integrator)
     return Scenario(threat, T_imp, z0, r0, r_imp)

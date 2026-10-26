@@ -12,6 +12,9 @@ def test_engineering_config_values():
     assert cfg.interceptor.kv_divert_dv == 435.0
     assert cfg.scenario.aim_radius == (0.0, 35000.0)
     assert cfg.params()['min_track_time'] == 5.0
+    assert cfg.sim.integrator == "rk4"
+    # Isp is chosen so the propellant burns for the 5 s the mode was tuned with
+    assert cfg.interceptor.burn_time == pytest.approx(5.0, abs=0.01)
 
 
 def test_demo_config_values():
@@ -21,6 +24,8 @@ def test_demo_config_values():
     assert cfg.scenario.aim_radius is None
     # The viewer reads a missing divert budget as "unlimited"
     assert 'kv_divert_dv' not in cfg.params()
+    assert cfg.sim.integrator == "rk4"
+    assert cfg.interceptor.burn_time == pytest.approx(8.0, abs=0.03)
 
 
 def _raw(name="engineering"):
@@ -45,4 +50,24 @@ def test_bad_launch_rule_is_rejected():
     data = _raw()
     data['engagement']['launch_rule'] = "always"
     with pytest.raises(ValueError, match="launch_rule"):
+        config_from_dict(data)
+
+
+def test_bad_integrator_is_rejected():
+    data = _raw()
+    data['sim']['integrator'] = "midpoint"
+    with pytest.raises(ValueError, match="integrator"):
+        config_from_dict(data)
+
+
+def test_euler_integrator_is_accepted():
+    data = _raw()
+    data['sim']['integrator'] = "euler"
+    assert config_from_dict(data).sim.integrator == "euler"
+
+
+def test_nonphysical_isp_is_rejected():
+    data = _raw()
+    data['interceptor']['isp'] = 0.0
+    with pytest.raises(ValueError, match="isp"):
         config_from_dict(data)

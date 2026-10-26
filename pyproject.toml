@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+plot = ["matplotlib"]   # scripts/convergence_study.py
 
 [tool.setuptools]
 packages = ["thaad_sim"]

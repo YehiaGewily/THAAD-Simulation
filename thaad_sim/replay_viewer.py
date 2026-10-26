@@ -56,6 +56,7 @@ def build_payload(hist):
         'mode': meta['mode'],
         'engageRule': meta['engage_rule'],
         'outcome': meta['outcome'],
+        'integrator': meta['integrator'],
         't': [round(float(t), 3) for t in hist['t']],
         'threat': _flat(hist['t_pos']),
         'interceptor': _flat(hist['i_pos']),

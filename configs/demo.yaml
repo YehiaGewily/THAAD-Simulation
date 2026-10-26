@@ -5,6 +5,7 @@ mode: "MAX-PERFORMANCE MODE"
 
 sim:
   dt: 0.02            # s
+  integrator: rk4     # rk4 (4th order) or euler (forward Euler, 1st order)
   t_max: 150.0        # s, base window; extended to 2 x T_imp + 30 s per scenario
   g: 9.81             # m/s^2
 
@@ -21,7 +22,7 @@ threat:
 
 interceptor:
   boost_thrust: 220000.0  # N
-  boost_time: 8.0         # s
+  isp: 400.0              # s, specific impulse; burn time = (wet - dry) * isp * g0 / thrust = 8.0 s
   mass_wet: 900.0         # kg
   mass_dry: 450.0         # kg
   kv_mass: 200.0          # kg

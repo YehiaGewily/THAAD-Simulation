@@ -1958,7 +1958,9 @@ function buildMethods() {
     ['kf_p0', 'p_0', 'Initial covariance (P₀ = p₀I)', '—'],
     ['threat_drag', 'k_T', 'Threat drag coefficient', '1/m'],
     ['boost_thrust', 'F_T', 'Boost thrust', 'N'],
-    ['boost_time', 't_b', 'Boost duration', 's'],
+    ['isp', String.raw`I_{sp}`, 'Booster specific impulse', 's'],
+    ['mass_flow', String.raw`\dot m`, 'Propellant mass flow, F_T / (I_sp g₀)', 'kg/s'],
+    ['burn_time', 't_b', 'Burn time, (m₀ − m_b) / ṁ', 's'],
     ['mass_wet', 'm_0', 'Launch mass', 'kg'],
     ['mass_dry', 'm_b', 'Mass at burnout', 'kg'],
     ['kv_mass', String.raw`m_{KV}`, 'Kill-vehicle mass', 'kg'],
@@ -1976,15 +1978,22 @@ function buildMethods() {
   const config = D.config ?? DEFAULT_CONFIGS[D.mode] ?? 'configs/engineering.yaml';
   const configArg = /\s/.test(config) ? `"${config}"` : config;
   const cmd = D.seed != null ? `python -m thaad_sim --config ${configArg} --seed ${D.seed}${D.legacyRng ? ' --legacy-rng' : ''}` : '';
+  const rk4 = D.integrator !== 'euler';
   const sections = [
     ['Frame and integration', `
-      <p>Flat-Earth east–north–up frame (x east, y north, z up) in SI units, constant gravity. Both bodies are integrated with semi-implicit Euler at Δt = ${p.dt} s: velocity is updated first, then position with the new velocity.</p>`],
+      <p>Flat-Earth east–north–up frame (x east, y north, z up) in SI units, constant gravity. Each body's state (position and velocity, plus mass for the interceptor) is advanced as one first-order system ẋ = f(x) with ${rk4 ? 'the classical fourth-order Runge–Kutta method (RK4)' : 'forward Euler'} at Δt = ${p.dt} s${rk4 ? '; the global error falls as Δt⁴' : '; the global error falls as Δt'}.</p>
+      <div class="eq">${tex(rk4
+        ? String.raw`\mathbf k_1 = f(\mathbf x_n),\ \ \mathbf k_2 = f\!\left(\mathbf x_n + \tfrac{\Delta t}{2}\mathbf k_1\right),\ \ \mathbf k_3 = f\!\left(\mathbf x_n + \tfrac{\Delta t}{2}\mathbf k_2\right),\ \ \mathbf k_4 = f(\mathbf x_n + \Delta t\,\mathbf k_3),\qquad \mathbf x_{n+1} = \mathbf x_n + \tfrac{\Delta t}{6}\left(\mathbf k_1 + 2\mathbf k_2 + 2\mathbf k_3 + \mathbf k_4\right)`
+        : String.raw`\mathbf x_{n+1} = \mathbf x_n + \Delta t\, f(\mathbf x_n)`)}</div>
+      <p>Guidance runs once per step and its command is held over the step. The step that contains burnout is split at t<sub>b</sub>, so thrust cuts off and the booster separates at the right instant. The integrator is set by <code>sim.integrator</code> (<code>rk4</code> or <code>euler</code>); <code>scripts/convergence_study.py</code> checks the observed orders.</p>`],
     ['Threat dynamics', `
       <p>Point mass under gravity and quadratic drag.</p>
       <div class="eq">${tex(String.raw`\ddot{\mathbf r}_T = -g\,\hat{\mathbf z} - k_T\,\lVert\dot{\mathbf r}_T\rVert\,\dot{\mathbf r}_T`)}</div>`],
     ['Interceptor dynamics', `
-      <p>Thrust F<sub>T</sub> acts along the guidance command during boost while mass drops linearly from m<sub>0</sub> to m<sub>b</sub>. After burnout the kill vehicle (mass m<sub>KV</sub>) steers with its divert thrusters.</p>
-      <div class="eq">${tex(String.raw`m\,\ddot{\mathbf r}_I = F_T\,\hat{\mathbf a}_c - m g\,\hat{\mathbf z} - k\,\lVert\dot{\mathbf r}_I\rVert\,\dot{\mathbf r}_I + \eta\, m\,\mathbf a_c,\qquad \eta = \begin{cases}0.1 & t < t_b\\ 1 & t \ge t_b\end{cases}`)}</div>`],
+      <p>Thrust F<sub>T</sub> acts along the guidance command during boost. Mass is part of the integrated state: the motor burns propellant at the rate set by thrust and specific impulse until m<sub>0</sub> − m<sub>b</sub> is spent at t<sub>b</sub>. The booster then separates and the kill vehicle (mass m<sub>KV</sub>) steers with its divert thrusters.</p>
+      <div class="eq">${tex(String.raw`m\,\ddot{\mathbf r}_I = F_T\,\hat{\mathbf a}_c - m g\,\hat{\mathbf z} - k\,\lVert\dot{\mathbf r}_I\rVert\,\dot{\mathbf r}_I + \eta\, m\,\mathbf a_c,\qquad \eta = \begin{cases}0.1 & t < t_b\\ 1 & t \ge t_b\end{cases}`)}</div>
+      <div class="eq">${tex(String.raw`\dot m = -\frac{F_T}{I_{sp}\,g_0}\ \ (t < t_b),\qquad t_b = \frac{(m_0 - m_b)\,I_{sp}\,g_0}{F_T},\qquad m(t_b^+) = m_{KV},\quad F_T = 0,\ \dot m = 0\ \ (t > t_b)`)}</div>
+      <p>With no gravity or drag this gives the rocket equation, Δv = I<sub>sp</sub> g<sub>0</sub> ln(m<sub>0</sub>/m<sub>b</sub>), with g<sub>0</sub> = 9.80665 m/s².</p>`],
     ['Guidance: proportional navigation', `
       <p>Relative state from the Kalman estimate of the threat, r = r̂<sub>T</sub> − r<sub>I</sub> and v = v̂<sub>T</sub> − v<sub>I</sub>. The command includes a gravity bias and is capped at n<sub>max</sub>·g${p.kv_divert_dv ? '. The kill vehicle has a finite divert budget' : ''}.</p>
       <div class="eq">${tex(String.raw`\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
@@ -1999,7 +2008,7 @@ function buildMethods() {
       <div class="eq">${tex(String.raw`t^\ast = \frac{v_z + \sqrt{v_z^2 + 2 g z}}{g},\qquad \mathrm{PIP} = (x + v_x t^\ast,\ y + v_y t^\ast),\qquad \text{launch if } \lVert\mathrm{PIP}\rVert \le R_D`)}</div>` : `
       <p>This mode launches on the first descending track estimate after 3 s and does not gate on the predicted impact point. The PIP shown is for reference only.</p>`],
     ['Kill assessment', `
-      <p>Each step both bodies move along straight segments; the closest point of approach inside the step decides the kill.</p>
+      <p>Within each step both bodies are taken to move along the straight chords between their integrated start and end positions; the closest point of approach inside the step decides the kill.</p>
       <div class="eq">${tex(String.raw`t^\ast = \operatorname{clamp}\!\left(-\frac{\Delta\mathbf p\cdot\Delta\mathbf v}{\lVert\Delta\mathbf v\rVert^2},\ 0,\ \Delta t\right),\qquad \text{kill if } \lVert\Delta\mathbf p + \Delta\mathbf v\, t^\ast\rVert < R_k`)}</div>`],
     ['Parameters used in this run', `
       <table class="params"><thead><tr><th>Symbol</th><th>Quantity</th><th style="text-align:right">Value</th><th>Unit</th></tr></thead><tbody>
@@ -2014,6 +2023,7 @@ function buildMethods() {
         <li>Quadratic drag with constant coefficients: no atmosphere model or Mach dependence.</li>
         <li>The radar measures Cartesian position and velocity directly; real sensors measure range and angles.</li>
         <li>Point-mass vehicles with no attitude dynamics, actuator lag or seeker model.</li>
+        <li>Constant thrust and specific impulse during boost. The kill vehicle's mass is held at m<sub>KV</sub>: its divert budget is a Δv limit, and divert propellant is not modeled.</li>
         <li>Analysis quantities (LOS rate, closing velocity, ZEM) are computed from the true states; guidance itself uses the Kalman estimate.</li>
         <li>Parameters are illustrative, not data for any real system.</li>
       </ul>`],
