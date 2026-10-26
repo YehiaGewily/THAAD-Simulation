@@ -119,6 +119,8 @@ $$
 
 The chord departs from the curved path by at most $a\Delta t^2/8$, about 1.5 cm at 30 g.
 
+**Ground impact.** When a step ends with the threat below the ground, the threat stops at the $z = 0$ crossing on the same chord, at the fraction $f = z_k / (z_k - z_{k+1})$ of the step. The impact time $t_k + f\Delta t$ and the impact point are then exact to the chord error rather than up to one step ($v\Delta t \approx 10$ m) late and underground. The kill check covers only the part of that step before the impact.
+
 ## 7. Verification
 
 Every number below comes from a script in `scripts/` or a test in `tests/`, and the data behind the figures is committed in `results/`.

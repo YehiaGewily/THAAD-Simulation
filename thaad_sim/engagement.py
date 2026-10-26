@@ -119,16 +119,19 @@ def run(cfg, rng, console=None):
         i_p0 = interceptor.pos.copy()
         t_p0 = threat.pos.copy()
         interceptor.update(t, ep, ev, dt)
-        threat.update(dt)
+        t_ground = threat.update(dt)
+        # A ground impact ends the step early: the threat stops at z = 0 after t_ground
+        window = dt if t_ground is None else t_ground
 
-        # Kill check: CPA between both straight-line segments over the same step.
-        # The segments are the chords between the integrator's step endpoints,
-        # so this works the same for any integrator; the chord departs from the
-        # curved path by about a*dt^2/8 (a few cm at dt = 0.02 s).
+        # Kill check: CPA between both straight-line segments over the same step,
+        # up to any ground impact. The segments are the chords between the
+        # integrator's step endpoints, so this works the same for any
+        # integrator; the chord departs from the curved path by about a*dt^2/8
+        # (a few cm at dt = 0.02 s).
+        i_v = (interceptor.pos - i_p0) / dt
+        t_v = (threat.pos - t_p0) / window
         if interceptor.launched and not interceptor.exploded:
-            i_v = (interceptor.pos - i_p0) / dt
-            t_v = (threat.pos - t_p0) / dt
-            t_off, d_min = get_cpa(i_p0, i_v, t_p0, t_v, dt)
+            t_off, d_min = get_cpa(i_p0, i_v, t_p0, t_v, window)
             min_sep = d_min if min_sep is None else min(min_sep, d_min)
             if d_min < eng.kill_radius:
                 interceptor.exploded = True
@@ -154,17 +157,22 @@ def run(cfg, rng, console=None):
                 break
 
         if not threat.active:
+            # The last row is the impact itself, at the interpolated time and point
+            t_imp = t + t_ground
+            _record(hist, t_imp, threat.pos, i_p0 + i_v * t_ground, ep, mp,
+                    "FLYING" if interceptor.launched else "SEARCH", interceptor.stage,
+                    threat.vel, i_v, kf_err, kf_sig, kf_cov)
             impact_range = np.linalg.norm(threat.pos[:2])
             if cfg.pip_gated and not interceptor.launched and impact_range > eng.defended_radius:
                 outcome = "NO ENGAGE"
                 console.print(
-                    f"[bold cyan][T+{t_next:05.2f}] HELD FIRE:[/bold cyan] threat impacted "
+                    f"[bold cyan][T+{t_imp:05.2f}] HELD FIRE:[/bold cyan] threat impacted "
                     f"{impact_range/1000:.1f} km from origin, outside the defended area."
                 )
             else:
                 outcome = "GROUND"
                 console.print(
-                    f"[bold red][T+{t_next:05.2f}] THREAT HIT GROUND BEFORE INTERCEPT.[/bold red]"
+                    f"[bold red][T+{t_imp:05.2f}] THREAT HIT GROUND BEFORE INTERCEPT.[/bold red]"
                 )
             break
 

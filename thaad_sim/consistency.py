@@ -78,7 +78,7 @@ def track_run(cfg, rng, truth_q=None, max_time=None):
 
     t = 0.0
     rows = []
-    prev = threat.state.copy()
+    impact, impact_time = np.full(2, np.nan), np.nan
     while threat.active and (max_time is None or t < max_time):
         mp = threat.pos + rng.normal(0, cfg.sensor.pos_noise, 3)
         mv = threat.vel + rng.normal(0, cfg.sensor.vel_noise, 3)
@@ -88,19 +88,14 @@ def track_run(cfg, rng, truth_q=None, max_time=None):
         rows.append((t, kf.nees(threat.state), np.nan if kf.nis is None else kf.nis,
                      pip[:2] if pip is not None else (np.nan, np.nan),
                      np.nan if tgo is None else tgo, threat.vel.copy()))
-        prev = threat.state.copy()
-        threat.update(dt)
+        t_ground = threat.update(dt)
+        if t_ground is not None:
+            # The threat stops at the ground crossing, interpolated inside the step
+            impact, impact_time = threat.pos[:2].copy(), t + t_ground
+            break
         if truth_q:
             threat.state = threat.state + L @ rng.standard_normal(STATE_DIM)
         t += dt
-
-    # Ground crossing, interpolated linearly inside the last step
-    if threat.active:
-        impact, impact_time = np.full(2, np.nan), np.nan
-    else:
-        f = prev[2] / (prev[2] - threat.pos[2])
-        impact = prev[:2] + f * (threat.pos[:2] - prev[:2])
-        impact_time = t - dt + f * dt
 
     t, nees, nis, pip, tgo, vel = (np.array(c, dtype=float) for c in zip(*rows))
     return TrackRun(t, nees, nis, pip, tgo, vel, impact, impact_time)

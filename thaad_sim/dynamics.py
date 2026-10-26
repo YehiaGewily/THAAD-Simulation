@@ -37,11 +37,22 @@ class BallisticThreat:
         return np.concatenate((vel, acc))
 
     def update(self, dt):
+        """Advance one step; returns the time into the step at which the threat
+        reached the ground, or None while it is still airborne."""
         if not self.active:
-            return
-        self.state = integrate(self.state, self.derivative, dt, self.integrator)
-        if self.pos[2] <= 0:
-            self.active = False
+            return None
+        prev = self.state
+        self.state = integrate(prev, self.derivative, dt, self.integrator)
+        if self.pos[2] > 0:
+            return None
+        # The ground crossing falls inside this step. Stop the threat at z = 0,
+        # interpolated along the step's chord (the same straight segment the
+        # kill check uses) rather than at the first state below the ground.
+        f = prev[2] / (prev[2] - self.state[2])
+        self.state = prev + f * (self.state - prev)
+        self.state[2] = 0.0
+        self.active = False
+        return f * dt
 
 
 class Interceptor:
