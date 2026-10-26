@@ -26,3 +26,25 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -v
+
+  viewer:
+    # The built templates under thaad_sim/viewer/ are committed so the package
+    # needs no Node; check that they match a fresh build of viewer/.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: viewer/package-lock.json
+
+      - name: Build
+        working-directory: viewer
+        run: |
+          npm ci
+          npm run build
+
+      - name: Committed templates match the build
+        run: git diff --exit-code --stat -- thaad_sim/viewer

@@ -1,3 +1,6 @@
 replays/
 __pycache__/
 *.egg-info/
+/site/
+viewer/node_modules/
+viewer/dist/

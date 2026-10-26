@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Batch results</title>
+<meta name="description" content="Outcome rates, engagement metrics and verification studies for a batch of seeded THAAD-style intercept simulations.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070a0f'/%3E%3Cpath d='M7 24V15M13 24V9M19 24V13M25 24V6' stroke='%23f2b45c' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Source of thaad_sim/viewer/dashboard_template.html. Edit src/dashboard/*, then run `npm run build` in viewer/. -->
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">THAAD · terminal defense sim · batch results</div>
+    <h1 id="title">Batch results</h1>
+    <p class="meta" id="meta"></p>
+    <nav aria-label="Sections">
+      <a href="#outcomes">Outcomes</a>
+      <a href="#metrics">Metrics</a>
+      <a href="#consistency">Filter consistency</a>
+      <a href="#convergence">Convergence</a>
+      <a href="#reproduce">Reproduce</a>
+    </nav>
+  </header>
+  <div class="tiles" id="tiles"></div>
+  <main id="main"></main>
+  <footer>Educational simulation; parameters are illustrative, not data for any real system.</footer>
+</div>
+<script id="dashboard-data" type="application/json">__DASHBOARD_DATA__</script>
+<script type="module" src="./src/dashboard/main.js"></script>
+</body>
+</html>

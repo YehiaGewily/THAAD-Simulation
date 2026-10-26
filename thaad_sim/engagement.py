@@ -8,7 +8,10 @@ from .estimation import KalmanFilter
 from .scenario import spawn_threat
 
 HIST_KEYS = ('t', 't_pos', 'i_pos', 'k_pos', 'status', 'stage', 'raw',
-             't_vel', 'i_vel', 'kf_err', 'kf_sig')
+             't_vel', 'i_vel', 'kf_err', 'kf_sig', 'kf_cov')
+
+# Unique entries of the filter's 3x3 position covariance, as stored in kf_cov
+POS_COV_INDEX = ((0, 1, 2, 0, 0, 1), (0, 1, 2, 1, 2, 2))   # xx, yy, zz, xy, xz, yz
 
 
 def make_rng(seed, legacy=False):
@@ -38,8 +41,8 @@ def get_cpa(pos1, vel1, pos2, vel2, dt):
         return dt, d_end
 
 
-def _record(hist, t, t_pos, i_pos, k_pos, raw, status, stage, t_vel, i_vel, kf_err, kf_sig):
-    row = (t, t_pos, i_pos, k_pos, status, stage, raw, t_vel, i_vel, kf_err, kf_sig)
+def _record(hist, t, t_pos, i_pos, k_pos, raw, status, stage, t_vel, i_vel, kf_err, kf_sig, kf_cov):
+    row = (t, t_pos, i_pos, k_pos, status, stage, raw, t_vel, i_vel, kf_err, kf_sig, kf_cov)
     for key, value in zip(HIST_KEYS, row):
         hist[key].append(value.copy() if isinstance(value, np.ndarray) else value)
 
@@ -85,6 +88,7 @@ def run(cfg, rng, console=None):
         # Filter error vs truth and its 1-sigma bounds, for the analysis view
         kf_err = np.hstack((ep - threat.pos, ev - threat.vel))
         kf_sig = np.sqrt(np.diag(kf.P))
+        kf_cov = kf.P[POS_COV_INDEX]
 
         # Launch once the track is mature and the threat is descending. The
         # PIP-gated rule also requires the predicted impact point to fall
@@ -134,7 +138,7 @@ def run(cfg, rng, console=None):
                 closing = np.linalg.norm(i_v - t_v)
 
                 _record(hist, k_time, k_pos_t, k_pos_i, ep, mp, "HIT", interceptor.stage,
-                        t_v, i_v, kf_err, kf_sig)
+                        t_v, i_v, kf_err, kf_sig, kf_cov)
 
                 outcome = "KILL"
                 kill_info = {
@@ -166,7 +170,7 @@ def run(cfg, rng, console=None):
 
         _record(hist, t_next, threat.pos, interceptor.pos, ep, mp,
                 "FLYING" if interceptor.launched else "SEARCH", interceptor.stage,
-                threat.vel, interceptor.vel, kf_err, kf_sig)
+                threat.vel, interceptor.vel, kf_err, kf_sig, kf_cov)
 
         t = t_next
 

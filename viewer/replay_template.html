@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THAAD Engagement Replay</title>
+<meta name="description" content="Interactive 3D replay of a simulated terminal ballistic-missile intercept.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070a0f'/%3E%3Cpath d='M6 24a14 14 0 0 1 20 0' stroke='%23f2b45c' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3Cpath d='M11 24a8 8 0 0 1 10 0' stroke='%23f2b45c' stroke-width='2.5' fill='none' stroke-linecap='round' opacity='.55'/%3E%3Ccircle cx='22.5' cy='8.5' r='2.6' fill='%23f0705a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<!-- Source of thaad_sim/viewer/replay_template.html. Edit src/replay/*, then run `npm run build` in viewer/. -->
+</head>
+<body>
+<main id="scene" aria-label="3D engagement view"></main>
+<div id="vignette"></div>
+<div id="grain"></div>
+
+<div id="hud">
+  <section id="mission" class="glass" aria-label="Mission clock">
+    <div class="clockrow">
+      <span id="clock"><span class="unit">T+</span>000.00</span>
+      <span id="status-chip" class="flag" aria-live="polite">Tracking</span>
+    </div>
+    <ol id="phases" aria-label="Engagement phases"></ol>
+  </section>
+
+  <div id="left">
+  <header id="brand" class="glass">
+    <div class="eyebrow">THAAD · terminal defense sim</div>
+    <h1>Engagement replay</h1>
+    <div class="meta"><span id="mode" class="flag"></span><span id="rule"></span></div>
+    <p id="scenario"></p>
+  </header>
+
+  <aside id="telemetry" aria-label="Telemetry">
+    <article class="glass inst threat">
+      <header>Threat</header>
+      <div class="big"><span id="th-alt">—</span><small>altitude</small></div>
+      <dl>
+        <div><dt>Speed</dt><dd id="th-spd">—</dd></div>
+        <div><dt>Ground range</dt><dd id="th-rng">—</dd></div>
+        <div title="1σ position uncertainty from the Kalman covariance (3D)"><dt>Track σ</dt><dd id="th-sig">—</dd></div>
+        <div title="Kalman estimate minus truth (3D)"><dt>Track error</dt><dd id="th-err">—</dd></div>
+      </dl>
+    </article>
+    <article class="glass inst kv">
+      <header>Interceptor <span id="kv-stage" class="stage">On launcher</span></header>
+      <div class="big"><span id="kv-alt">—</span><small>altitude</small></div>
+      <dl>
+        <div><dt>Speed</dt><dd id="kv-spd">—</dd></div>
+        <div><dt>Acceleration</dt><dd id="kv-g">—</dd></div>
+      </dl>
+      <div class="bar" aria-hidden="true"><i id="kv-gbar"></i></div>
+    </article>
+    <article class="glass inst eng">
+      <header>Engagement</header>
+      <div class="big"><span id="en-ttg">—</span><small>time to go</small></div>
+      <dl>
+        <div><dt>Separation</dt><dd id="en-sep">—</dd></div>
+        <div><dt>Closing speed</dt><dd id="en-cls">—</dd></div>
+      </dl>
+    </article>
+  </aside>
+
+  </div>
+
+  <aside id="side">
+    <section id="bda" class="glass" aria-live="polite" aria-label="Engagement result">
+      <div class="eyebrow"><span>Battle damage assessment</span><span id="bda-time"></span></div>
+      <div id="bda-title"></div>
+      <p id="bda-sub"></p>
+      <dl id="bda-rows"></dl>
+      <div class="actions">
+        <p>Run the script again for a new scenario.</p>
+        <button id="bda-close" class="ghost">Dismiss</button>
+        <button id="bda-replay" class="primary">Replay</button>
+      </div>
+    </section>
+    <section id="events" class="glass">
+      <h2>Event log</h2>
+      <ol id="log"></ol>
+    </section>
+    <section id="profilebox" class="glass">
+      <h2>Side profile <span>altitude vs ground range, km</span></h2>
+      <canvas id="profile" aria-label="Altitude versus ground range chart"></canvas>
+    </section>
+  </aside>
+
+  <nav id="transport" class="glass" aria-label="Playback">
+    <div class="row1">
+      <button id="restart" class="icon ghost" title="Restart (Home)" aria-label="Restart">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 8.2A5.4 5.4 0 1 0 4.2 4.3"/><path d="M2.4 2.4v3.2h3.2"/></svg>
+      </button>
+      <button id="play" class="icon primary" title="Play / pause (Space)" aria-label="Pause"></button>
+      <div id="timeline-wrap">
+        <div id="ticks"></div>
+        <input id="timeline" type="range" min="0" max="1" step="0.001" value="0" aria-label="Replay time">
+        <div id="scrub-tip"></div>
+      </div>
+      <div id="tlabel"></div>
+      <div class="seg" id="speeds" role="group" aria-label="Playback speed"></div>
+    </div>
+    <div class="row2">
+      <span class="seg-label" id="cam-label">Camera</span>
+      <div class="seg" id="cam-btns" role="group" aria-labelledby="cam-label">
+        <button data-cam="cinematic" title="Cinematic (C)">Cinematic</button>
+        <button data-cam="orbit" title="Free orbit (O)">Orbit</button>
+        <button data-cam="threat" title="Chase threat (T)">Threat</button>
+        <button data-cam="kv" title="Chase interceptor (I)">Interceptor</button>
+        <button data-cam="top" title="Top-down (V)">Top</button>
+      </div>
+      <div class="spacer">
+        <div id="refs" aria-hidden="true" title="Scale at the camera's focus point; axes are east, north, up">
+          <canvas id="triad"></canvas>
+          <div id="scalebar"><div class="sb" id="sb-bar"></div><span id="sb-label">10 km</span></div>
+        </div>
+      </div>
+      <button id="style-btn" title="Scientific or cinematic rendering (G)" aria-pressed="true">Scientific</button>
+      <div class="menu-wrap">
+        <button id="layers-btn" aria-haspopup="true" aria-expanded="false" title="Scene layers">Layers</button>
+        <div id="layer-btns" class="menu glass" role="menu" aria-label="Scene layers">
+          <button data-layer="radar" role="menuitemcheckbox">Radar returns <kbd>R</kbd></button>
+          <button data-layer="track" role="menuitemcheckbox">Kalman track <kbd>K</kbd></button>
+          <button data-layer="cov" role="menuitemcheckbox" title="The filter's 3σ position ellipsoid, drawn 10× larger about the true position">Track uncertainty 3σ ×10 <kbd>E</kbd></button>
+          <button data-layer="los" role="menuitemcheckbox">Line of sight <kbd>L</kbd></button>
+          <button data-layer="labels" role="menuitemcheckbox">Labels <kbd>H</kbd></button>
+          <div class="sep"></div>
+          <button data-layer="slowmo" role="menuitemcheckbox">Slow motion at intercept <kbd>M</kbd></button>
+        </div>
+      </div>
+      <button id="analysis-btn" title="Analysis figures and methods (A)" aria-pressed="false">Analysis</button>
+      <button id="focus-btn" title="Hide panels (F)">Focus</button>
+      <button id="help-btn" class="icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+    </div>
+  </nav>
+
+  <section id="analysis" class="glass" aria-label="Analysis">
+    <header>
+      <h2>Analysis</h2>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="kin" aria-selected="true">Kinematics</button>
+        <button role="tab" data-tab="gui" aria-selected="false">Guidance</button>
+        <button role="tab" data-tab="kf" aria-selected="false">Kalman filter</button>
+        <button role="tab" data-tab="methods" aria-selected="false">Methods</button>
+      </div>
+      <div class="tools">
+        <button id="csv-btn" title="Download the full time series as CSV">Export CSV</button>
+        <button id="analysis-close" class="icon ghost" title="Close (A)" aria-label="Close analysis">✕</button>
+      </div>
+    </header>
+    <div class="body">
+      <p class="intro" id="analysis-intro">All figures share one time axis: seconds since the first radar track. The amber line is the replay cursor and dashed lines mark launch, burnout and the end of the engagement. Hover a figure to read values; click it to jump there.</p>
+      <div id="tab-kin" class="tabpanel" role="tabpanel"></div>
+      <div id="tab-gui" class="tabpanel" role="tabpanel" hidden></div>
+      <div id="tab-kf" class="tabpanel" role="tabpanel" hidden></div>
+      <div id="tab-methods" class="tabpanel" role="tabpanel" hidden></div>
+    </div>
+  </section>
+
+  <div id="toast" role="status"></div>
+</div>
+
+<section id="help" class="glass" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
+  <header><h2 id="help-title">Keyboard shortcuts</h2><button id="help-close" class="ghost">Close <kbd>Esc</kbd></button></header>
+  <div class="grid">
+    <div class="k"><span>Play / pause</span><span><kbd>Space</kbd></span></div>
+    <div class="k"><span>Cinematic camera</span><span><kbd>C</kbd></span></div>
+    <div class="k"><span>Step 1 s</span><span><kbd>←</kbd><kbd>→</kbd></span></div>
+    <div class="k"><span>Free orbit</span><span><kbd>O</kbd></span></div>
+    <div class="k"><span>Step 5 s</span><span><kbd>Shift</kbd><kbd>←</kbd><kbd>→</kbd></span></div>
+    <div class="k"><span>Chase threat</span><span><kbd>T</kbd></span></div>
+    <div class="k"><span>Start / end</span><span><kbd>Home</kbd><kbd>End</kbd></span></div>
+    <div class="k"><span>Chase interceptor</span><span><kbd>I</kbd></span></div>
+    <div class="k"><span>Speed 0.25× – 20×</span><span><kbd>1</kbd>–<kbd>6</kbd></span></div>
+    <div class="k"><span>Top-down</span><span><kbd>V</kbd></span></div>
+    <div class="k"><span>Focus mode</span><span><kbd>F</kbd></span></div>
+    <div class="k"><span>Analysis figures</span><span><kbd>A</kbd></span></div>
+    <div class="k"><span>Scientific / cinematic style</span><span><kbd>G</kbd></span></div>
+    <div class="k"><span>Layers</span><span><kbd>R</kbd><kbd>K</kbd><kbd>E</kbd><kbd>L</kbd><kbd>H</kbd><kbd>M</kbd></span></div>
+  </div>
+  <p>Drag anywhere in the scene to spin the camera and scroll to zoom; right-drag pans. Grabbing a chase camera keeps the orbit centered on that vehicle. Press <kbd>C</kbd>, <kbd>T</kbd>, <kbd>I</kbd> or <kbd>V</kbd> to hand the camera back.</p>
+</section>
+
+<div id="loading"><div class="card"><strong>Engagement replay</strong><div class="line"></div><span>Loading scene</span></div></div>
+
+<script id="replay-data" type="application/json">__REPLAY_DATA__</script>
+<script>
+  // Shown if the viewer never starts (a browser without WebGL or ES modules)
+  setTimeout(function () {
+    if (!window.__viewerReady) {
+      document.getElementById('loading').innerHTML =
+        '<div class="err">The replay viewer could not start.<br>' +
+        'It needs a current browser with WebGL and JavaScript enabled.</div>';
+    }
+  }, 8000);
+</script>
+<script type="module" src="./src/replay/main.js"></script>
+</body>
+</html>

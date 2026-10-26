@@ -14,6 +14,7 @@ estimation error squared (NEES) and the normalized innovation squared (NIS):
     python scripts/filter_consistency.py     # writes docs/figures/nees.png and nis.png
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -33,6 +34,8 @@ from thaad_sim.consistency import (  # noqa: E402
 
 DEFAULT_OUT_DIR = ROOT / "docs" / "figures"
 DEFAULT_CONFIG = ROOT / "configs" / "engineering.yaml"
+DEFAULT_JSON = ROOT / "results" / "consistency.json"
+JSON_POINTS = 600   # the series in the JSON are decimated to about this many points
 
 # Categorical slot 1 of the reference palette, with text, band and grid inks
 SERIES = "#2a78d6"
@@ -77,11 +80,36 @@ def _figure(name, cases, dim, n_runs, out):
     print(f"Wrote {out}")
 
 
+def _series(t, avg, bounds, max_points=JSON_POINTS):
+    """Summary and a decimated copy of one averaged statistic, for the JSON file."""
+    step = max(1, int(np.ceil(len(t) / max_points)))
+    return {
+        "mean": round(float(np.mean(avg)), 4),
+        "inside": round(fraction_inside(avg, bounds), 4),
+        "steps": len(t),
+        "t": np.round(t[::step], 3).tolist(),
+        "value": np.round(avg[::step], 4).tolist(),
+    }
+
+
+def write_json(path, n_runs, q, nees_b, nis_b, results):
+    """The averaged NEES and NIS behind the figures, read by python -m thaad_sim.dashboard."""
+    data = {"runs": n_runs, "q": q, "state_dim": STATE_DIM, "meas_dim": MEAS_DIM,
+            "nees_bounds": [round(b, 4) for b in nees_b], "nis_bounds": [round(b, 4) for b in nis_b]}
+    for key, (t, nees, nis, t_nis) in results.items():
+        data[key] = {"nees": _series(t, nees, nees_b), "nis": _series(t_nis, nis, nis_b)}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, separators=(",", ":")) + "\n", encoding="utf-8")
+    print(f"Wrote {path}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--runs", type=int, default=50, help="number of seeded runs (seeds 0..N-1)")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
+    parser.add_argument("--json", type=Path, default=DEFAULT_JSON,
+                        help="where to write the averaged series for the dashboard")
     args = parser.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -100,6 +128,8 @@ def main(argv=None):
               f"({100 * fraction_inside(nees, nees_b):5.1f} % inside {nees_b[0]:.2f}-{nees_b[1]:.2f}), "
               f"mean NIS {nis.mean():5.2f} ({100 * fraction_inside(nis, nis_b):5.1f} % inside "
               f"{nis_b[0]:.2f}-{nis_b[1]:.2f}), {len(t)} steps, {args.runs} runs")
+
+    write_json(args.json, args.runs, q, nees_b, nis_b, results)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     titles = (f"Matched model: drag off, truth noise = Q  (q = {q:g} m²/s³)",

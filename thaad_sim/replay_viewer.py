@@ -66,6 +66,7 @@ def build_payload(hist):
         'interceptorVel': _flat(hist['i_vel']),
         'kfErr': _flat_fine(hist['kf_err']),
         'kfSig': _flat_fine(hist['kf_sig']),
+        'kfCov': _flat_fine(hist['kf_cov']),   # position covariance xx, yy, zz, xy, xz, yz, m^2
         'status': status,
         'stage': [STAGE_CODES[s] for s in hist['stage']],
         'g': g,
@@ -83,14 +84,18 @@ def build_payload(hist):
     }
 
 
-def show_replay(hist, open_browser=True, out_dir=OUTPUT_DIR):
-    """Write a self-contained HTML replay of ``hist`` and open it; returns the file path."""
+def show_replay(hist, open_browser=True, out_dir=OUTPUT_DIR, path=None):
+    """Write a self-contained HTML replay of ``hist`` and open it; returns the file path.
+
+    The file goes to ``path`` if given, else to a time-stamped name in ``out_dir``.
+    """
     data = json.dumps(build_payload(hist), separators=(",", ":")).replace("</", "<\\/")
     html = TEMPLATE.read_text(encoding="utf-8").replace("__REPLAY_DATA__", data)
 
-    out_dir = Path(out_dir)
-    out_dir.mkdir(exist_ok=True)
-    path = (out_dir / f"replay_{time.strftime('%Y%m%d_%H%M%S')}.html").resolve()
+    if path is None:
+        path = Path(out_dir) / f"replay_{time.strftime('%Y%m%d_%H%M%S')}.html"
+    path = Path(path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
 
     if open_browser:

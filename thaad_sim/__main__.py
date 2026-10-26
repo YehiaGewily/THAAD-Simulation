@@ -42,6 +42,8 @@ def main(argv=None):
                              "so seeds they printed replay the same scenario")
     parser.add_argument("--no-browser", action="store_true",
                         help="write the replay file without opening it")
+    parser.add_argument("--out", type=Path, default=None, metavar="PATH",
+                        help="replay file to write (default: replays/replay_<timestamp>.html)")
     args = parser.parse_args(argv)
 
     console = Console()
@@ -53,7 +55,7 @@ def main(argv=None):
 
     hist = run(cfg, make_rng(seed, args.legacy_rng), console)
     hist['meta'].update(seed=seed, config=config, legacy_rng=args.legacy_rng)
-    path = show_replay(hist, open_browser=not args.no_browser)
+    path = show_replay(hist, open_browser=not args.no_browser, path=args.out)
     if args.no_browser:
         console.print(f"[dim]Replay written to: {path}[/dim]")
     else:
