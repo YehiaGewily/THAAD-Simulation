@@ -23,34 +23,61 @@ The code closes a simplified but complete engagement loop:
 
 Every run is a pure function of a YAML config and a seed, and opens as a self-contained HTML replay. [docs/methods.md](docs/methods.md) has the equations, assumptions, verification results and limitations.
 
-## Quick start
+## How to run the project
 
-You need Python 3.9 or newer. From the project folder:
+### 1. Install the Python package
+
+You need **Python 3.9 or newer** (no Node.js is required just to run simulations — the compiled 3D viewer template is already bundled inside `thaad_sim/viewer/`). From the project root:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-Run one engagement in engineering mode, the default and recommended mode:
+*(On Windows, if `python` is not on your `PATH`, use the Python Launcher `py -m pip install -e ".[dev]"` and `py -m thaad_sim ...`.)*
+
+### 2. Run a single engagement and open the 3D replay viewer
+
+Run one engagement in **engineering mode** (the default and recommended mode):
 
 ```bash
 python -m thaad_sim --config configs/engineering.yaml
 ```
 
-The terminal prints the event log and a battle-damage table, and the replay opens in your browser. Each run prints its seed, and passing it back repeats the scenario exactly:
+The terminal prints the live event log and a battle-damage assessment table, writes a self-contained HTML replay to `replays/replay_<timestamp>.html`, and opens it automatically in your browser.
+
+Each run prints its random seed so you can replay notable scenarios deterministically:
 
 ```bash
+# Direct kinetic hit at 37.9 km altitude (1.79 m miss distance):
 python -m thaad_sim --config configs/engineering.yaml --seed 913
+
+# Divert-budget exhaustion & close miss (16.7 m CPA miss, shows the CPA endgame micro-view & ground impact):
+python -m thaad_sim --config configs/engineering.yaml --seed 13
+
+# High-performance demo mode (100 % intercept rate):
+python -m thaad_sim --config configs/demo.yaml --seed 42
 ```
 
-| Option | Effect |
+| CLI Option | Effect |
 | --- | --- |
+| `--config PATH` | Scenario configuration file (`configs/engineering.yaml` or `configs/demo.yaml`) |
 | `--seed N` | Replay a scenario; a run is fully determined by config and seed |
 | `--out PATH` | Write the replay to `PATH` instead of `replays/replay_<timestamp>.html` |
-| `--no-browser` | Write the replay without opening it |
+| `--no-browser` | Write the replay HTML file without opening a browser tab |
 | `--legacy-rng` | Draw random numbers like the old single-file scripts, so their printed seeds replay |
 
-Replays are single HTML files with the viewer (including Three.js) built in, so they work offline and can be shared as-is. Only the fonts and the equation renderer in the Methods tab load from a CDN; offline, the equations show as source text.
+Replays are single HTML files with the entire 3D viewer (including Three.js) inlined, so they work offline and can be shared as a single file. Only the fonts and the KaTeX equation renderer in the Methods tab load from a CDN; offline, the equations show as source text.
+
+### 3. Rebuild or live-develop the 3D viewer (optional)
+
+If you edit the frontend code under `viewer/src/` or `viewer/replay_template.html`, rebuild the single-file templates with **Node.js**:
+
+```bash
+cd viewer
+npm install
+npm run build      # bundles thaad_sim/viewer/replay_template.html & dashboard_template.html
+npm run dev        # starts a Vite live-reload server using your latest replay in replays/
+```
 
 ### Modes
 
@@ -67,11 +94,12 @@ In engineering mode, interception is likely but not guaranteed: every one of the
 
 | Feature | |
 | --- | --- |
-| Scene | Terrain with the defended area and range rings, the PIP, radar returns, the Kalman track, the filter's 3σ uncertainty ellipsoid, and the line of sight |
-| Timeline | Mission clock, a phase stepper (Track → Boost → Midcourse → Terminal → Kill/Impact) you can click to jump, scrubbing, and slow motion at the intercept |
-| Telemetry | Threat, interceptor and engagement readouts, an event log, a side-profile chart, and a debrief card |
-| Styles (`G`) | **Scientific**, the default: plain trajectories, drop lines, an altitude scale, a scale bar, an ENU axis triad and exact markers. **Cinematic**: glow, a cloud deck, smoke trails, a radar sweep and explosions |
-| Analysis (`A`) | Synchronized figures for kinematics, guidance (LOS rate, commanded acceleration, divert Δv, zero-effort miss) and the Kalman filter (errors against ±3σ, raw against filtered), a Methods tab with every parameter of the run and the command to reproduce it, and **Export CSV** |
+| Scene | Terrain with the defended area and range rings, atmospheric strata (20 / 50 / 60 km), radar returns, the Kalman track, the filter's 3σ uncertainty ellipsoid, line of sight, 3D GNC vectors ($\mathbf{v}_T, \mathbf{v}_I, \mathbf{a}_c$, ZEM), dynamic PIP migration trail, $3\sigma$ impact footprint ellipse, vacuum vs. dragged ballistic projection arcs, and CPA kill-radius sphere ($R_k$) |
+| Seeker PiP (`P`) | Picture-in-Picture optical seeker / target-cam inset with a live SVG reticle (LOS-rate dot, commanded acceleration vector $\mathbf{a}_c$, ZEM gate ring, and range/FOV telemetry); click the inset to toggle chase camera |
+| Timeline | Mission clock, a phase stepper (Track → Boost → Midcourse → Terminal → Kill/CPA/Impact) you can click to jump, scrubbing, and slow motion around both intercepts and failed-intercept CPAs |
+| Telemetry | Threat (including live PIP drag-mismatch bias), interceptor (including mass, divert $\Delta v$ used and remaining budget bar) and engagement readouts (including live ZEM and LOS rate), an event log, an interactive 3-mode mini-chart (`Elev`, `Plan`, `ZEM`) with click/drag scrubbing, and a debrief card |
+| Styles (`G`) | **Scientific**, the default: plain trajectories, drop lines, an altitude scale, a scale bar, an ENU axis triad and exact markers. **Cinematic**: glow, a cloud deck, smoke trails, hypersonic shock cone, directional DACS lateral thruster plumes, a radar sweep and explosions |
+| Analysis (`A`) | Synchronized figures for kinematics, guidance (True vs. Kalman-perceived LOS rate and zero-effort miss, commanded acceleration, divert $\Delta v$) and the Kalman filter (errors against ±3σ, raw against filtered, single-run NEES & NIS consistency, and PIP drag-mismatch bias), a Methods tab with every parameter of the run and the command to reproduce it, and **Export CSV** |
 
 | Control | Action |
 | --- | --- |
@@ -80,7 +108,7 @@ In engineering mode, interception is likely but not guaranteed: every one of the
 | `Home` / `End` | Jump to start / end |
 | `1`–`6` | Playback speed 0.25× – 20× |
 | `C` `O` `T` `I` `V` | Camera: cinematic, free orbit, chase threat, chase interceptor, top-down |
-| `R` `K` `E` `L` `H` `M` | Toggle radar returns, Kalman track, track uncertainty (3σ), line of sight, labels, slow motion (also in the **Layers** menu) |
+| `R` `K` `E` `L` `X` `P` `H` `M` | Toggle radar returns, Kalman track, track uncertainty (3σ), line of sight, 3D GNC vectors & PIP, seeker PiP cam, labels, slow motion (also in the **Layers** menu) |
 | `A` | Analysis panel |
 | `G` | Scientific / cinematic style |
 | `F` | Focus mode: hide the side panels |
@@ -199,14 +227,14 @@ cd viewer && npm ci && npm run build
 
 | Module | Contents |
 | --- | --- |
-| `replay/data.js` | Payload parsing, scene-unit conversion, interpolation, event times |
-| `replay/scene.js` | Renderer, camera, sky, terrain, clouds, defended dome, reference geometry, 3D labels |
-| `replay/models.js` | Threat, interceptor and spent-booster models |
-| `replay/effects.js` | Trails, radar returns, explosions, line-of-sight lines |
+| `replay/data.js` | Payload parsing, scene-unit conversion, interpolation, GNC/PIP/CPA series, ballistic projection |
+| `replay/scene.js` | Renderer, main & seeker PiP cameras, sky, terrain, clouds, defended dome, atmospheric strata, 3D labels |
+| `replay/models.js` | Threat (with hypersonic shock cone), interceptor (with directional DACS plume) and spent-booster models |
+| `replay/effects.js` | Trails, radar returns, explosions, LOS lines, 3D GNC vectors, PIP migration & footprint, CPA sphere |
 | `replay/covariance.js` | The 3σ uncertainty ellipsoid |
-| `replay/director.js` | Camera director for the directed cameras |
-| `replay/charts.js`, `replay/analysis.js` | Figure engine, the Analysis drawer, Methods tab and CSV export |
-| `replay/ui.js` | HUD, playback controls, keyboard shortcuts, styles |
+| `replay/director.js` | Camera director for the directed cameras (including CPA endgame framing on misses) |
+| `replay/charts.js`, `replay/analysis.js` | Interactive 3-mode mini-chart (`Elev`, `Plan`, `ZEM`), figure engine, Analysis drawer, Methods tab and CSV export |
+| `replay/ui.js` | HUD, seeker PiP reticle, playback controls, keyboard shortcuts, styles |
 | `replay/palette.js` | The colour palette, the single source for the scene, HUD and figures |
 | `dashboard/` | The batch dashboard and its SVG charts |
 

@@ -188,4 +188,4 @@ The filter and the PIP ignore drag, while the threat has it. Over 100 seeded thr
 - **Point masses**: no attitude dynamics, actuator lag, seeker model, or warhead and lethality model. A kill is geometric (closest approach under 10 m).
 - **Propulsion** has constant thrust and specific impulse. The divert budget is a Δv limit, not propellant mass.
 - **Guidance timing**: the command is held over each step, so the closed loop converges at first order in Δt whatever the integrator. The vehicle dynamics between commands are integrated at the integrator's order.
-- **Visualization**: vehicle models are drawn about 8× real size and the uncertainty ellipsoid 10×. The analysis figures compute LOS rate, closing velocity and zero-effort miss from the true states, while guidance uses the estimate.
+- **Visualization**: vehicle models are drawn about 8× real size and the uncertainty ellipsoid 10×. In the Analysis Guidance tab, both the true and the filter-perceived LOS rate and zero-effort miss are plotted together so the effect of estimation noise and unmodeled drag on the guidance law can be inspected directly.
