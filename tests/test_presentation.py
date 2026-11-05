@@ -31,6 +31,10 @@ def test_payload_carries_the_position_covariance(demo_hist):
     sig = np.asarray(payload['kfSig']).reshape(n, 6)
     # The diagonal entries are the variances whose roots the sigma column holds
     assert np.allclose(np.sqrt(cov[:, :3]), sig[:, :3], atol=0.02)
+    assert len(payload['nees']) == n
+    assert len(payload['nis']) == n
+    assert payload['cpa'] is not None
+    assert set(payload['cpa']).issuperset({'time', 'alt', 'dist', 'closing', 'tPos', 'iPos'})
 
 
 def test_position_covariance_index_picks_the_unique_entries():
@@ -55,8 +59,10 @@ def test_built_templates_are_self_contained(template, token):
 
 def test_replay_template_has_every_layer_toggle():
     html = REPLAY_TEMPLATE.read_text(encoding="utf-8")
-    for layer in ("radar", "track", "cov", "los", "labels", "slowmo"):
+    for layer in ("radar", "track", "cov", "los", "vectors", "pip", "labels", "slowmo"):
         assert f'data-layer="{layer}"' in html
+    for prof in ("elev", "plan", "zem"):
+        assert f'data-pmode="{prof}"' in html
 
 
 def test_dashboard_data_from_the_committed_batch(tmp_path):
