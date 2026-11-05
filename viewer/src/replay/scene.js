@@ -7,7 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { D, defR, impactPos, killPos, pipPos, threatStart } from './data.js';
+import { D, cpaInfo, cpaMidPos, defR, impactPos, killPos, missCpaT, pipPos, threatStart } from './data.js';
 import { glowSprite, glowTexture, fresnelMaterial, ringTexture } from './materials.js';
 import { PALETTE, hex } from './palette.js';
 
@@ -32,6 +32,7 @@ const FOG_COLOR = new THREE.Color().setRGB(0.028, 0.05, 0.09);
 scene.fog = new THREE.Fog(FOG_COLOR, 160, 700);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 4000);
+const seekerCam = new THREE.PerspectiveCamera(2.8, 288 / 162, 0.005, 1200);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
@@ -275,7 +276,14 @@ const refGeo = new THREE.Group();
   const pts = [0, 0, 0, 0, maxAlt, 0];
   for (let a = 10; a <= maxAlt; a += 10) {
     pts.push(-0.4, a, 0, 0.4, a, 0);
-    if (a % 20 === 0) gridLabel(`${a} km`, new THREE.Vector3(0.6, a, 0), 'alt');
+    if (a % 20 === 0) {
+      const note = a === 20 ? '20 km · Stratosphere' : a === 60 ? '60 km · Mesosphere' : `${a} km`;
+      gridLabel(note, new THREE.Vector3(0.6, a, 0), 'alt');
+    }
+  }
+  if (maxAlt >= 50) {
+    pts.push(-0.65, 50, 0, 0.65, 50, 0);
+    gridLabel('50 km · Stratopause', new THREE.Vector3(0.8, 50, 0), 'alt');
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
@@ -299,6 +307,7 @@ function marker(color, pos) {
 }
 const killMarker = marker(hex(PALETTE.safe), killPos);
 const impactMarker = marker(hex(PALETTE.threat), impactPos);
+const cpaMarker = marker(hex(PALETTE.accent), cpaMidPos);
 
 // ---------------------------------------------------------------------------
 // Labels
@@ -319,6 +328,11 @@ const lblPip = label(PALETTE.accent);
 if (pipPos) { lblPip.position.copy(pipPos); lblPip.userData.inner.innerHTML = 'PIP<small>predicted impact point</small>'; }
 const lblKill = label(PALETTE.safe);
 if (killPos) { lblKill.position.copy(killPos); lblKill.userData.inner.innerHTML = `Intercept<small>${(D.kill.alt / 1000).toFixed(1)} km · miss ${D.kill.dist.toFixed(2)} m</small>`; }
+const lblCpa = label(PALETTE.accent);
+if (missCpaT != null && cpaInfo) {
+  lblCpa.position.copy(cpaMidPos);
+  lblCpa.userData.inner.innerHTML = `Closest approach<small>${(cpaInfo.alt / 1000).toFixed(1)} km · miss ${cpaInfo.dist.toFixed(1)} m</small>`;
+}
 const lblImpact = label(PALETTE.threat);
 if (impactPos) {
   lblImpact.position.copy(impactPos);
@@ -327,7 +341,7 @@ if (impactPos) {
 }
 
 export {
-  renderer, labelRenderer, scene, camera, controls, composer, bloom, sky, terrainMat, cloudMat, clouds,
+  renderer, labelRenderer, scene, camera, seekerCam, controls, composer, bloom, sky, terrainMat, cloudMat, clouds,
   DOME_OPACITY, domeMat, battery, metal, darkMetal, smooth, dropT, dropI, setDrop, gridLabels, refGeo,
-  killMarker, impactMarker, lblThreat, lblKV, lblBattery, lblPip, lblKill, lblImpact,
+  killMarker, impactMarker, cpaMarker, lblThreat, lblKV, lblBattery, lblPip, lblKill, lblCpa, lblImpact,
 };

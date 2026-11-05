@@ -148,10 +148,13 @@ dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 dl div { display: grid; gap: 2px; }
 dt { color: var(--faint); font-size: 11px; }
 dd { margin: 0; font: 500 12.5px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
-.bar { height: 3px; border-radius: 2px; background: rgba(214, 228, 240, 0.07); margin-top: 10px; overflow: hidden; }
+.bars { display: grid; gap: 5px; margin-top: 10px; }
+.bar { height: 3px; border-radius: 2px; background: rgba(214, 228, 240, 0.07); overflow: hidden; }
 .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--kv), var(--accent) 70%, var(--threat)); transition: width 0.15s linear; }
+.bar.dv > i { width: 100%; background: linear-gradient(90deg, var(--safe), var(--kv)); }
+.bar.dv > i.low { background: var(--threat); }
 
-/* ---------- Right column: debrief, event log, profile ---------- */
+/* ---------- Right column: seeker PiP, debrief, event log, profile ---------- */
 #side {
   position: absolute; right: 18px; top: 18px; bottom: 150px; width: 320px;
   display: flex; flex-direction: column; gap: 10px; justify-content: flex-end; pointer-events: none;
@@ -159,7 +162,28 @@ dd { margin: 0; font: 500 12.5px/1.2 var(--mono); font-variant-numeric: tabular-
 }
 #side > * { pointer-events: auto; }
 #events { padding: 14px 16px 12px; flex: 0 1 auto; min-height: 64px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--hairline-2) transparent; }
-#bda, #profilebox { flex: none; }
+#pip-box, #bda, #profilebox { flex: none; }
+body.pip-off #pip-box, body.bda-on #pip-box { display: none; }
+#pip-box { padding: 11px 14px 12px; }
+.pip-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pip-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--safe); margin-right: 6px; box-shadow: 0 0 8px var(--safe); vertical-align: middle; }
+#pip-fov { font: 500 10.5px/1 var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
+#pip-view {
+  position: relative; width: 100%; height: 148px; border-radius: var(--r-sm); overflow: hidden;
+  border: 1px solid var(--hairline-2); background: rgba(7, 11, 18, 0.35); cursor: pointer;
+}
+#pip-view:hover { border-color: var(--kv); }
+#pip-reticle { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#pip-reticle path, #pip-reticle line, #pip-reticle circle {
+  fill: none; stroke: rgba(110, 198, 230, 0.45); stroke-width: 0.9; vector-effect: non-scaling-stroke;
+}
+#pip-reticle #pip-zem-ring { stroke: rgba(242, 180, 92, 0.55); stroke-dasharray: 2 2; }
+#pip-reticle #pip-ac-vec { stroke: rgba(124, 196, 164, 0.85); stroke-width: 1.4; }
+#pip-reticle #pip-los-dot { fill: var(--threat); stroke: none; }
+.pip-hud {
+  position: absolute; left: 8px; right: 8px; bottom: 6px; display: flex; justify-content: space-between;
+  font: 500 10px/1 var(--mono); color: var(--muted); pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
 #log { list-style: none; margin: 0; padding: 0 0 0 2px; position: relative; }
 #log::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 1px; background: var(--hairline-2); }
 #log li { display: none; grid-template-columns: 12px 58px 1fr; align-items: baseline; gap: 6px; padding: 4px 0; font-size: 12.5px; line-height: 1.4; }
@@ -177,8 +201,17 @@ dd { margin: 0; font: 500 12.5px/1.2 var(--mono); font-variant-numeric: tabular-
 #log li.latest { animation: enter 0.5s var(--ease); }
 @keyframes enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-#profilebox { padding: 14px 16px 10px; }
-#profile { width: 100%; height: 140px; display: block; }
+#profilebox { padding: 12px 14px 10px; }
+.prof-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.seg.mini { padding: 1.5px; gap: 1px; border-radius: 6px; }
+.seg.mini button { font-size: 10.5px; padding: 4px 6.5px; border-radius: 4px; }
+.prof-wrap { position: relative; }
+#profile { width: 100%; height: 140px; display: block; cursor: crosshair; }
+#prof-tip {
+  position: absolute; top: 4px; padding: 3px 6px; border-radius: 4px; transform: translateX(-50%);
+  font: 500 10px/1.2 var(--mono); color: var(--text); background: var(--surface-solid); border: 1px solid var(--hairline-2);
+  pointer-events: none; white-space: nowrap; z-index: 4;
+}
 
 #bda {
   padding: 18px 18px 16px; border-color: var(--hairline-2);

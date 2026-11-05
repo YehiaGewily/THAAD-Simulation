@@ -1,7 +1,7 @@
 // The Analysis drawer: per-frame series derived from the replay, the figures
 // on the Kinematics, Guidance and Kalman filter tabs, the Methods tab and the
 // CSV export.
-import { D, MODE_NAMES, N, T, tStart } from './data.js';
+import { D, GNC, MODE_NAMES, N, T, tStart } from './data.js';
 import { $, COL, toast } from './dom.js';
 import { figure, xMax } from './charts.js';
 import { SERIES } from './palette.js';
@@ -101,8 +101,11 @@ export function buildAnalysis() {
   const gui = figGrid('tab-gui');
   figure(gui, 'gui', {
     title: 'Line-of-sight rate', unit: 'mrad/s', fmt: fmtSig('mrad/s'), yMin: 0,
-    series: [{ label: 'LOS rate', color: SER.kv, data: S.los }],
-    caption: '‖ω‖ = ‖r × v‖ / ‖r‖² from the true states. Proportional navigation commands acceleration to drive this rate to zero.',
+    series: [
+      { label: 'True', color: SER.threat, data: GNC.losTrue },
+      { label: 'Kalman-perceived', color: SER.kv, data: GNC.losEst, dash: [4, 3] },
+    ],
+    caption: '‖ω‖ = ‖r × v‖ / ‖r‖² from the true state vs. the Kalman estimate that drives proportional navigation.',
   });
   figure(gui, 'gui', {
     title: 'Commanded acceleration', unit: 'g', fmt: fmtU('g', 2), yMin: 0,
@@ -119,10 +122,13 @@ export function buildAnalysis() {
       : 'Cumulative ∫‖a<sub>c</sub>‖dt spent by the kill vehicle after burnout. This mode has no divert budget.',
   });
   figure(gui, 'gui', {
-    title: 'Zero-effort miss', unit: 'm', fmt: fmtSig('m'), log: true,
-    series: [{ label: 'ZEM', color: SER.eng, data: S.zem }],
+    title: 'Zero-effort miss (true vs perceived)', unit: 'm', fmt: fmtSig('m'), log: true,
+    series: [
+      { label: 'True ZEM', color: SER.threat, data: GNC.zemTrue },
+      { label: 'Perceived ZEM', color: SER.kv, data: GNC.zemEst, dash: [4, 3] },
+    ],
     refs: [{ y: D.killRadius || 10, label: `kill radius ${D.killRadius} m` }],
-    caption: 'Miss distance if neither body accelerated from this instant: ‖r + v·t<sub>go</sub>‖ with t<sub>go</sub> = −(r·v)/‖v‖². The intercept is assured once it stays below the kill radius.',
+    caption: 'Miss distance ‖r + v·t<sub>go</sub>‖ if neither body accelerated from this instant: true state vs. the filter estimate seen by guidance.',
   });
 
   const kf = figGrid('tab-kf');
@@ -158,7 +164,21 @@ export function buildAnalysis() {
     series: [{ label: 'Kalman estimate', color: SER.threat, data: S.epos }, { label: 'Raw radar', color: SER.kv, data: S.eraw }],
     caption: 'Magnitude of the position error of the raw radar measurements and of the filtered estimate.',
   });
-  kfMag.el.style.gridColumn = '1 / -1';
+  figure(kf, 'kf', {
+    title: 'Filter consistency (NEES & NIS)', unit: 'χ²₆', fmt: fmtU('', 2), thin: true, yMin: 0,
+    series: [
+      { label: 'NEES (ε)', color: SER.threat, data: GNC.nees },
+      { label: 'NIS (ε_ν)', color: SER.kv, data: GNC.nis, dash: [3, 3] },
+    ],
+    refs: [{ y: 6.0, label: 'E[χ²₆] = 6' }, { y: 14.45, label: '95 % bound 14.4' }],
+    caption: 'Normalized estimation error squared ε = eᵀP⁻¹e and innovation squared ε<sub>ν</sub> = νᵀS⁻¹ν. Unmodeled drag drives NEES above the χ²₆ bound early in flight.',
+  });
+  const pipFig = figure(kf, 'kf', {
+    title: 'Predicted impact point (PIP) drag-mismatch bias', unit: 'm', fmt: fmtSig('m'), log: true,
+    series: [{ label: '‖PIP(t) − r_imp‖', color: SER.eng, data: GNC.pipBias }],
+    caption: 'Distance between the filter\'s instantaneous drag-free ground crossing (PIP) and the true dragged impact point. Unmodeled drag causes a kilometre-scale downrange overshoot early in flight that shrinks as the threat decelerates.',
+  });
+  pipFig.el.style.gridColumn = '1 / -1';
 
   buildMethods();
 }
@@ -225,7 +245,8 @@ function buildMethods() {
     ['Guidance: proportional navigation', `
       <p>Relative state from the Kalman estimate of the threat, r = r̂<sub>T</sub> − r<sub>I</sub> and v = v̂<sub>T</sub> − v<sub>I</sub>. The command includes a gravity bias and is capped at n<sub>max</sub>·g${p.kv_divert_dv ? '. The kill vehicle has a finite divert budget' : ''}.</p>
       <div class="eq">${tex(String.raw`\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
-      ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}`],
+      ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}
+      <p>The <b>GNC vectors &amp; PIP</b> layer (<kbd>X</kbd>) draws the 3D velocity vectors, the commanded lateral acceleration vector a<sub>c</sub> (turning coral when g-saturated), and the zero-effort miss (ZEM) vector bar in the scene. On the Guidance tab, both the true and the filter-perceived LOS rate and ZEM are plotted so estimation noise and drag mismatch can be compared directly.</p>`],
     ['Tracking: Kalman filter', `
       <p>Six-state linear filter. The threat moves under known gravity, entered as a control input, and is perturbed by continuous white-noise acceleration of spectral density q on each axis. The radar observes position and velocity directly (H = I) with independent Gaussian noise. The first measurement initializes the state, with P₀ = R.</p>
       <div class="eq">${tex(String.raw`\mathbf x = \begin{bmatrix}\mathbf p\\ \mathbf v\end{bmatrix},\quad F = \begin{bmatrix} I & \Delta t\, I\\ 0 & I\end{bmatrix},\quad B = \begin{bmatrix} \tfrac12\Delta t^2 I\\ \Delta t\, I\end{bmatrix},\quad \mathbf u = -g\,\hat{\mathbf z},\quad R = \operatorname{diag}(\sigma_p^2 I,\ \sigma_v^2 I)`)}</div>
@@ -282,7 +303,8 @@ export function exportCsv() {
     'est_x_m', 'est_y_m', 'est_z_m', 'radar_x_m', 'radar_y_m', 'radar_z_m',
     'kf_err_x_m', 'kf_err_y_m', 'kf_err_z_m', 'kf_err_vx_mps', 'kf_err_vy_mps', 'kf_err_vz_mps',
     'kf_sigma_x_m', 'kf_sigma_y_m', 'kf_sigma_z_m', 'kf_sigma_vx_mps', 'kf_sigma_vy_mps', 'kf_sigma_vz_mps',
-    'accel_cmd_g', 'separation_m', 'closing_velocity_mps', 'los_rate_mradps', 'zero_effort_miss_m', 'divert_dv_mps'];
+    'accel_cmd_g', 'separation_m', 'closing_velocity_mps', 'los_rate_mradps', 'los_rate_perceived_mradps',
+    'zero_effort_miss_m', 'zero_effort_miss_perceived_m', 'divert_dv_mps', 'interceptor_mass_kg', 'pip_bias_m', 'nees'];
   const STATUS = ['SEARCH', 'FLYING', 'HIT'], STAGE = ['IDLE', 'BOOST', 'KV_COAST'];
   const num = (v, d) => (Number.isFinite(v) ? +v.toFixed(d) : '');
   const v3 = (arr, i) => [arr[3 * i], arr[3 * i + 1], arr[3 * i + 2]];
@@ -293,7 +315,8 @@ export function exportCsv() {
       ...v3(D.threat, i), ...v3(D.threatVel, i), ...v3(D.interceptor, i), ...v3(D.interceptorVel, i),
       ...v3(D.track, i), ...v3(D.radar, i),
       ...D.kfErr.slice(6 * i, 6 * i + 6), ...D.kfSig.slice(6 * i, 6 * i + 6),
-      D.g[i], num(S.sep[i] * 1000, 2), num(S.vc[i], 2), num(S.los[i], 4), num(S.zem[i], 3), num(S.dv[i], 2),
+      D.g[i], num(S.sep[i] * 1000, 2), num(S.vc[i], 2), num(S.los[i], 4), num(GNC.losEst[i], 4),
+      num(S.zem[i], 3), num(GNC.zemEst[i], 3), num(S.dv[i], 2), num(GNC.mass[i], 1), num(GNC.pipBias[i], 2), num(GNC.nees[i], 2),
     ].join(','));
   }
   const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));

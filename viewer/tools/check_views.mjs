@@ -37,7 +37,7 @@ for (const [key, cam] of [['o', 'orbit'], ['t', 'threat'], ['i', 'kv'], ['v', 't
   s = await press(key);
   check(s.camMode === cam, `key ${key.toUpperCase()} -> ${cam} camera`);
 }
-for (const [key, layer] of [['r', 'radar'], ['k', 'track'], ['e', 'cov'], ['l', 'los'], ['h', 'labels'], ['m', 'slowmo']]) {
+for (const [key, layer] of [['r', 'radar'], ['k', 'track'], ['e', 'cov'], ['l', 'los'], ['x', 'vectors'], ['p', 'pip'], ['h', 'labels'], ['m', 'slowmo']]) {
   const before = s.layers[layer];
   s = await press(key);
   check(s.layers[layer] === !before, `key ${key.toUpperCase()} toggles ${layer}`);

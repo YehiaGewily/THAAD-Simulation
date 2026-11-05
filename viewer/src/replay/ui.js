@@ -4,8 +4,8 @@
 // telemetry readouts.
 import * as THREE from 'three';
 import {
-  D, MODE_NAMES, N, RULE_NAMES, T, burnT, defR, endEventT, impactPos, impactT, killT, launchT,
-  pipPos, tEnd, terminalT, threatStart, tStart,
+  D, GNC, MODE_NAMES, N, RULE_NAMES, T, burnT, cpaInfo, cpaT, defR, divertBudget, endEventT, impactPos,
+  impactT, killT, launchT, missCpaT, pipPos, tEnd, terminalT, threatStart, tStart,
 } from './data.js';
 import { $, COL, fmtKm, fmtSpd, toast } from './dom.js';
 import { seg } from './charts.js';
@@ -23,11 +23,20 @@ $('rule').textContent = `${RULE_NAMES[D.engageRule] ?? D.engageRule}${D.seed != 
     `Defended radius <b>${defR.toFixed(0)} km</b>, kill radius <b>${D.killRadius} m</b>.`;
 }
 
+const dvExhaustIdx = divertBudget != null ? GNC.dvUsed.findIndex((v) => v >= divertBudget - 0.5) : -1;
+const dvExhaustT = dvExhaustIdx >= 0 ? T[dvExhaustIdx] : null;
+
 const events = [{ t: tStart, text: 'Radar track initiated', cls: 'info' }];
 if (D.outcome === 'NO ENGAGE') events.push({ t: D.minTrackTime ?? tStart, text: 'PIP outside defended area — weapons hold', cls: 'info' });
 if (launchT != null) events.push({ t: launchT, text: D.engageRule === 'PIP-GATED LAUNCH' ? 'PIP inside defended area — launch' : 'Track confirmed — launch', cls: 'warn' });
 if (burnT != null) events.push({ t: burnT, text: 'Booster burnout, kill vehicle separates', cls: 'kv' });
 if (terminalT != null) events.push({ t: terminalT, text: 'Terminal homing, under 15 km', cls: 'kv' });
+if (dvExhaustT != null && (killT == null || dvExhaustT < killT)) {
+  events.push({ t: dvExhaustT, text: `Divert Δv budget spent (${divertBudget} m/s)`, cls: 'warn' });
+}
+if (missCpaT != null && cpaInfo != null) {
+  events.push({ t: missCpaT, text: `Closest approach — ${cpaInfo.dist.toFixed(1)} m miss`, cls: 'bad', cpa: true });
+}
 if (killT != null) events.push({ t: killT, text: `Target destroyed — ${D.kill.dist.toFixed(2)} m miss`, cls: 'ok' });
 if (D.outcome === 'GROUND') events.push({ t: impactT, text: 'Threat impact — intercept failed', cls: 'bad' });
 if (D.outcome === 'NO ENGAGE') events.push({ t: impactT, text: 'Threat lands outside the defended area', cls: 'info' });
@@ -49,7 +58,9 @@ events.slice(1).forEach((e) => {
   const i = document.createElement('i');
   i.style.left = `${((e.t - tStart) / (tEnd - tStart)) * 100}%`;
   i.style.setProperty('--c', tickColors[e.cls]);
-  if (tickLabels[e.cls]) i.dataset.label = tickLabels[e.cls];
+  if (e.cpa) i.dataset.label = 'CPA';
+  else if (e.t === launchT && tickLabels[e.cls]) i.dataset.label = 'Launch';
+  else if (e.t === endEventT && tickLabels[e.cls]) i.dataset.label = tickLabels[e.cls];
   $('ticks').appendChild(i);
 });
 
@@ -61,6 +72,7 @@ if (D.outcome === 'NO ENGAGE') {
   if (launchT != null) phases.push({ label: 'Boost', t: launchT });
   if (burnT != null) phases.push({ label: 'Midcourse', t: burnT });
   if (terminalT != null) phases.push({ label: 'Terminal', t: terminalT });
+  if (missCpaT != null) phases.push({ label: 'CPA', t: missCpaT, cpa: true });
 }
 if (killT != null) phases.push({ label: 'Kill', t: killT, end: 'ok' });
 else if (impactT != null) phases.push({ label: 'Impact', t: impactT, end: D.outcome === 'GROUND' ? 'bad' : 'info' });
@@ -69,8 +81,8 @@ phases.forEach((p) => {
   const b = document.createElement('button');
   b.textContent = p.label;
   b.title = `Jump to T+${p.t.toFixed(1)} s`;
-  // Outcome phases jump a few seconds early so the approach is visible
-  b.onclick = () => seek(p.end ? p.t - 3 : p.t);
+  // Outcome and CPA phases jump a few seconds early so the approach is visible
+  b.onclick = () => seek((p.end || p.cpa) ? Math.max(tStart, p.t - 2.5) : p.t);
   li.appendChild(b);
   if (p.end) li.classList.add(p.end);
   $('phases').appendChild(li);
@@ -91,6 +103,8 @@ phases.forEach((p) => {
     const r = impactPos.length();
     sub = `The threat reached the ground ${r <= defR ? 'inside' : 'outside'} the defended area.`;
     rows.push(['Impact point', `${r.toFixed(1)} km out`], ['Defended area', r <= defR ? 'Inside' : 'Outside']);
+    if (cpaInfo) rows.push(['Closest approach', `${cpaInfo.dist.toFixed(1)} m`]);
+    if (launchT != null) rows.push(['Divert Δv used', `${Math.round(GNC.dvUsed[N - 1])}${divertBudget ? ` / ${divertBudget}` : ''} m/s`]);
   } else if (D.outcome === 'NO ENGAGE') {
     title = 'Weapons hold'; cls = 'info';
     sub = 'The predicted impact point stayed outside the defended area, so no interceptor was launched.';
@@ -226,7 +240,7 @@ document.querySelectorAll('#cam-btns button').forEach((b) => { b.onclick = () =>
 
 const LAYER_NAMES = {
   radar: 'Radar returns', track: 'Kalman track', cov: 'Track uncertainty (3σ)', los: 'Line of sight',
-  labels: 'Labels', slowmo: 'Slow motion at intercept',
+  vectors: 'GNC vectors & PIP', pip: 'Seeker PiP cam', labels: 'Labels', slowmo: 'Slow motion at intercept',
 };
 function syncLayerButtons() {
   document.querySelectorAll('#layer-btns button').forEach((b) => {
@@ -234,6 +248,7 @@ function syncLayerButtons() {
     b.classList.toggle('on', on);
     b.setAttribute('aria-checked', on);
   });
+  document.body.classList.toggle('pip-off', !state.layers.pip);
 }
 export function toggleLayer(k) {
   state.layers[k] = !state.layers[k];
@@ -242,6 +257,34 @@ export function toggleLayer(k) {
 }
 document.querySelectorAll('#layer-btns button').forEach((b) => { b.onclick = () => toggleLayer(b.dataset.layer); });
 syncLayerButtons();
+
+const PROF_META = {
+  elev: ['Side profile', 'alt vs range, km'],
+  plan: ['Ground plan', 'east vs north + PIP'],
+  zem: ['Zero-effort miss', 'log ZEM & divert Δv'],
+};
+document.querySelectorAll('#prof-modes button').forEach((b) => {
+  b.onclick = () => {
+    state.profileMode = b.dataset.pmode;
+    document.querySelectorAll('#prof-modes button').forEach((x) => {
+      const on = x.dataset.pmode === state.profileMode;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-selected', on);
+    });
+    const m = PROF_META[state.profileMode];
+    if (m) {
+      $('prof-title').innerHTML = `${m[0]} <span id="prof-sub">${m[1]}</span>`;
+    }
+  };
+});
+
+const pipView = $('pip-view');
+if (pipView) {
+  pipView.onclick = () => {
+    const targetMode = state.simTime >= (launchT ?? Infinity) ? 'kv' : 'threat';
+    setCam(state.camMode === targetMode ? 'cinematic' : targetMode);
+  };
+}
 
 const layersBtn = $('layers-btn'), layersMenu = $('layer-btns');
 function setMenu(open) {
@@ -298,6 +341,8 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'k') toggleLayer('track');
   else if (k === 'e') toggleLayer('cov');
   else if (k === 'l') toggleLayer('los');
+  else if (k === 'x') toggleLayer('vectors');
+  else if (k === 'p') toggleLayer('pip');
   else if (k === 'h') toggleLayer('labels');
   else if (k === 'm') toggleLayer('slowmo');
   else if (k >= '1' && k <= '6') { setSpeed(SPEEDS[+k - 1]); toast(`Playback speed ${SPEEDS[+k - 1]}×`); }
@@ -350,14 +395,22 @@ if (hashArgs.has('analysis')) {
   if (TABS.includes(hashArgs.get('tab'))) setAnalysisTab(hashArgs.get('tab'));
 }
 
-// Slow down around the decisive moment so it is watchable
+// Slow down around the decisive moment (kill, CPA miss, or impact) so it is watchable
 export function slowFactor(time) {
-  if (!state.layers.slowmo || endEventT == null) return 1;
-  const slow = killT != null ? 0.1 : 0.3;
-  const a = Math.abs(time - endEventT);
-  if (a > 2.5) return 1;
-  if (a < 0.8) return slow;
-  return THREE.MathUtils.lerp(slow, 1, (a - 0.8) / 1.7);
+  if (!state.layers.slowmo) return 1;
+  let f = 1;
+  if (cpaT != null) {
+    const slow = killT != null ? 0.1 : 0.14;
+    const a = Math.abs(time - cpaT);
+    if (a < 0.8) f = Math.min(f, slow);
+    else if (a <= 2.4) f = Math.min(f, THREE.MathUtils.lerp(slow, 1, (a - 0.8) / 1.6));
+  }
+  if (endEventT != null && endEventT !== cpaT) {
+    const a = Math.abs(time - endEventT);
+    if (a < 0.7) f = Math.min(f, 0.3);
+    else if (a <= 2.2) f = Math.min(f, THREE.MathUtils.lerp(0.3, 1, (a - 0.7) / 1.5));
+  }
+  return f;
 }
 
 // ============================================================================
@@ -391,16 +444,72 @@ export function updateHud(h) {
     const k6 = 6 * fi;
     $('th-sig').textContent = threatAlive ? `±${Math.hypot(D.kfSig[k6], D.kfSig[k6 + 1], D.kfSig[k6 + 2]).toFixed(1)} m` : '—';
     $('th-err').textContent = threatAlive ? `${Math.hypot(D.kfErr[k6], D.kfErr[k6 + 1], D.kfErr[k6 + 2]).toFixed(1)} m` : '—';
+    const pb = GNC.pipBias[fi];
+    $('th-pip').textContent = threatAlive && isFinite(pb) ? (pb >= 1000 ? `${(pb / 1000).toFixed(2)} km` : `${Math.round(pb)} m`) : '—';
   }
-  $('kv-stage').textContent = !launched ? 'On launcher' : killed ? 'Hit target' : impacted || missed ? 'Missed' : stage === 1 ? 'Boost' : 'Coasting';
+  const dvUsed = GNC.dvUsed[fi] || 0;
+  const dvExhausted = divertBudget != null && dvUsed >= divertBudget - 0.5;
+  $('kv-stage').textContent = !launched ? 'On launcher' : killed ? 'Hit target' : impacted || missed ? 'Missed' : stage === 1 ? 'Boost' : dvExhausted ? 'Coasting (Δv 0)' : 'Coasting (KV)';
   $('kv-alt').textContent = launched && kvAlive ? fmtKm(ip.y) : '—';
   $('kv-spd').textContent = launched && kvAlive ? fmtSpd(iv.length()) : '—';
+  $('kv-mass').textContent = launched && kvAlive ? `${Math.round(GNC.mass[fi])} kg` : '—';
   $('kv-g').textContent = launched && kvAlive ? `${g.toFixed(1)} g` : '—';
   $('kv-gbar').style.width = `${launched && kvAlive ? Math.min(100, (g / (D.maxG || 40)) * 100) : 0}%`;
-  $('en-sep').textContent = launched && !killed && !impacted ? fmtKm(sep) : '—';
+  const dvWrap = $('kv-dvwrap'), dvBar = $('kv-dvbar');
+  if (launched && kvAlive) {
+    $('kv-dv').textContent = divertBudget != null ? `${Math.round(dvUsed)} / ${Math.round(divertBudget)} m/s` : `${Math.round(dvUsed)} m/s`;
+    if (divertBudget != null && divertBudget > 0) {
+      const remPct = Math.max(0, Math.min(100, (1 - dvUsed / divertBudget) * 100));
+      dvBar.style.width = `${remPct}%`;
+      dvBar.classList.toggle('low', remPct < 20);
+      dvWrap.hidden = false;
+    } else {
+      dvWrap.hidden = true;
+    }
+  } else {
+    $('kv-dv').textContent = '—';
+    dvBar.style.width = '100%';
+    dvBar.classList.remove('low');
+  }
+
+  const activeGuid = launched && !killed && !impacted;
+  $('en-sep').textContent = activeGuid ? fmtKm(sep) : '—';
   // Negative closing speed means the range is opening
-  $('en-cls').textContent = launched && !killed && !impacted ? fmtSpd(closing) : '—';
-  $('en-ttg').textContent = launched && !killed && !impacted && isFinite(ttg) ? `${ttg.toFixed(1)} s` : '—';
+  $('en-cls').textContent = activeGuid ? fmtSpd(closing) : '—';
+  const zem = GNC.zemTrue[fi], los = GNC.losTrue[fi];
+  $('en-zem').textContent = activeGuid && isFinite(zem) ? (zem >= 1000 ? `${(zem / 1000).toFixed(2)} km` : `${zem.toFixed(1)} m`) : '—';
+  $('en-los').textContent = activeGuid && isFinite(los) ? `${los.toFixed(2)} °/s` : '—';
+  $('en-ttg').textContent = activeGuid && isFinite(ttg) ? `${ttg.toFixed(1)} s` : '—';
+
+  // Optical Seeker / Target-Cam PiP Reticle HUD
+  if (state.layers.pip) {
+    const titleEl = $('pip-title'), fovEl = $('pip-fov'), rl = $('pip-readout-l'), rr = $('pip-readout-r');
+    const dot = $('pip-los-dot'), acVec = $('pip-ac-vec'), zemRing = $('pip-zem-ring');
+    if (titleEl) {
+      titleEl.textContent = !launched ? 'AN/TPY-2 Optical Track' : stage === 1 ? 'Boost Strapdown Cam' : 'KV IR Seeker · Track Gate';
+      const fovDeg = !launched ? 1.8 : THREE.MathUtils.clamp((sep > 0.05 ? Math.min(6.0, Math.max(0.8, 12 / sep)) : 6.0), 0.8, 6.0);
+      if (fovEl) fovEl.textContent = `FOV ${fovDeg.toFixed(1)}°`;
+      if (rl) rl.textContent = activeGuid ? `RNG ${fmtKm(sep)}` : threatAlive ? `ALT ${fmtKm(tp.y)}` : 'SIGNAL LOST';
+      if (rr) rr.textContent = activeGuid && isFinite(zem) ? `ZEM ${zem < 100 ? zem.toFixed(1) + 'm' : Math.round(zem) + 'm'}` : st.toUpperCase();
+      // Move reticle LOS-rate dot & a_c vector slightly inside the 160x90 SVG viewBox
+      const k3 = 3 * fi;
+      const ax = GNC.acScene[k3], ay = GNC.acScene[k3 + 1];
+      const zx = GNC.zemScene[k3], zy = GNC.zemScene[k3 + 1];
+      const ox = THREE.MathUtils.clamp(zx * 80, -28, 28);
+      const oy = THREE.MathUtils.clamp(-zy * 80, -22, 22);
+      if (dot) { dot.setAttribute('cx', (80 + ox).toFixed(1)); dot.setAttribute('cy', (45 + oy).toFixed(1)); }
+      if (acVec) {
+        const vx = THREE.MathUtils.clamp(ax * 0.14, -32, 32);
+        const vy = THREE.MathUtils.clamp(-ay * 0.14, -26, 26);
+        acVec.setAttribute('x2', (80 + vx).toFixed(1));
+        acVec.setAttribute('y2', (45 + vy).toFixed(1));
+      }
+      if (zemRing) {
+        const r = activeGuid && isFinite(zem) ? THREE.MathUtils.clamp(6 + Math.log10(Math.max(1, zem)) * 7, 6, 28) : 14;
+        zemRing.setAttribute('r', r.toFixed(1));
+      }
+    }
+  }
 
   let count = 0;
   events.forEach((e) => { const past = time >= e.t; e.el.classList.toggle('past', past); if (past) count++; });

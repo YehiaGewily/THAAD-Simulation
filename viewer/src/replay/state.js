@@ -15,8 +15,9 @@ export const state = {
   followFresh: false,
   chaseDist: 0.5,
   snapCamera: true,
-  layers: { radar: true, track: true, cov: true, los: true, labels: true, slowmo: true },
+  layers: { radar: true, track: true, cov: true, los: true, vectors: true, pip: true, labels: true, slowmo: true },
   sciStyle: true,
+  profileMode: 'elev',      // 'elev' | 'plan' | 'zem'
   analysisOpen: false,
   analysisTab: 'kin',
   bdaDismissed: false,

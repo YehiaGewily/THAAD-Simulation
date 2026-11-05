@@ -38,7 +38,7 @@
 
   <aside id="telemetry" aria-label="Telemetry">
     <article class="glass inst threat">
-      <header>Threat</header>
+      <header>Threat <span id="th-pip" class="stage" title="Drag-mismatch bias: distance from instantaneous vacuum PIP to true impact point"></span></header>
       <div class="big"><span id="th-alt">—</span><small>altitude</small></div>
       <dl>
         <div><dt>Speed</dt><dd id="th-spd">—</dd></div>
@@ -53,8 +53,13 @@
       <dl>
         <div><dt>Speed</dt><dd id="kv-spd">—</dd></div>
         <div><dt>Acceleration</dt><dd id="kv-g">—</dd></div>
+        <div title="Integrated vehicle mass (wet → dry → kill vehicle)"><dt>Mass</dt><dd id="kv-mass">—</dd></div>
+        <div title="Cumulative kill-vehicle divert Δv spent vs budget"><dt>Divert Δv</dt><dd id="kv-dv">—</dd></div>
       </dl>
-      <div class="bar" aria-hidden="true"><i id="kv-gbar"></i></div>
+      <div class="bars" aria-hidden="true">
+        <div class="bar" title="Lateral g-load vs limit"><i id="kv-gbar"></i></div>
+        <div class="bar dv" id="kv-dvwrap" title="Kill-vehicle divert Δv budget remaining"><i id="kv-dvbar"></i></div>
+      </div>
     </article>
     <article class="glass inst eng">
       <header>Engagement</header>
@@ -62,6 +67,8 @@
       <dl>
         <div><dt>Separation</dt><dd id="en-sep">—</dd></div>
         <div><dt>Closing speed</dt><dd id="en-cls">—</dd></div>
+        <div title="True zero-effort miss distance (‖r + v·t_go‖)"><dt>Zero-effort miss</dt><dd id="en-zem">—</dd></div>
+        <div title="Inertial line-of-sight rotation rate ‖ω‖"><dt>LOS rate</dt><dd id="en-los">—</dd></div>
       </dl>
     </article>
   </aside>
@@ -80,13 +87,44 @@
         <button id="bda-replay" class="primary">Replay</button>
       </div>
     </section>
+    <section id="pip-box" aria-label="Optical seeker and target camera">
+      <header class="pip-head">
+        <span class="pip-dot"></span>
+        <span id="pip-title">Target cam · optical</span>
+        <span id="pip-fov" class="pip-meta">FOV 2.5°</span>
+      </header>
+      <div id="pip-view" title="Click to toggle chase camera (P toggles inset)">
+        <svg id="pip-reticle" viewBox="0 0 200 112" aria-hidden="true">
+          <path d="M84 56H44M116 56H156M100 40V14M100 72V98" stroke="currentColor" stroke-width="0.9" opacity="0.45"/>
+          <path d="M22 24H12V36M178 24H188V36M22 88H12V76M178 88H188V76" stroke="currentColor" stroke-width="1.1" fill="none" opacity="0.55"/>
+          <circle cx="100" cy="56" r="14" stroke="currentColor" stroke-width="0.9" fill="none" opacity="0.4" stroke-dasharray="3 2"/>
+          <circle id="pip-zem-ring" cx="100" cy="56" r="24" stroke="var(--accent)" stroke-width="1" fill="none" opacity="0.65"/>
+          <line id="pip-ac-vec" x1="100" y1="56" x2="100" y2="56" stroke="var(--kv)" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>
+          <circle id="pip-los-dot" cx="100" cy="56" r="2.8" fill="var(--threat)" opacity="0.9"/>
+        </svg>
+        <div class="pip-hud">
+          <span id="pip-readout-l">ACQ</span>
+          <span id="pip-readout-r">—</span>
+        </div>
+      </div>
+    </section>
     <section id="events" class="glass">
       <h2>Event log</h2>
       <ol id="log"></ol>
     </section>
     <section id="profilebox" class="glass">
-      <h2>Side profile <span>altitude vs ground range, km</span></h2>
-      <canvas id="profile" aria-label="Altitude versus ground range chart"></canvas>
+      <div class="prof-head">
+        <h2 id="prof-title">Side profile <span id="prof-sub">alt vs range, km</span></h2>
+        <div class="seg mini" id="prof-modes" role="group" aria-label="Mini chart view">
+          <button data-pmode="elev" class="on" title="Altitude vs ground range (km)">Elev</button>
+          <button data-pmode="plan" title="Top-down ground track &amp; PIP migration (km)">Plan</button>
+          <button data-pmode="zem" title="Zero-effort miss (m) &amp; divert Δv">ZEM</button>
+        </div>
+      </div>
+      <div class="prof-wrap">
+        <canvas id="profile" aria-label="Interactive trajectory mini-chart"></canvas>
+        <div id="prof-tip" class="tip"></div>
+      </div>
     </section>
   </aside>
 
@@ -127,8 +165,10 @@
           <button data-layer="track" role="menuitemcheckbox">Kalman track <kbd>K</kbd></button>
           <button data-layer="cov" role="menuitemcheckbox" title="The filter's 3σ position ellipsoid, drawn 10× larger about the true position">Track uncertainty 3σ ×10 <kbd>E</kbd></button>
           <button data-layer="los" role="menuitemcheckbox">Line of sight <kbd>L</kbd></button>
+          <button data-layer="vectors" role="menuitemcheckbox" title="3D GNC vectors (v, a_c, ZEM), dynamic PIP ground trace &amp; ballistic projection">GNC vectors &amp; PIP <kbd>X</kbd></button>
           <button data-layer="labels" role="menuitemcheckbox">Labels <kbd>H</kbd></button>
           <div class="sep"></div>
+          <button data-layer="pip" role="menuitemcheckbox" title="Optical seeker and target-cam Picture-in-Picture inset">Seeker PiP cam <kbd>P</kbd></button>
           <button data-layer="slowmo" role="menuitemcheckbox">Slow motion at intercept <kbd>M</kbd></button>
         </div>
       </div>
@@ -180,6 +220,7 @@
     <div class="k"><span>Focus mode</span><span><kbd>F</kbd></span></div>
     <div class="k"><span>Analysis figures</span><span><kbd>A</kbd></span></div>
     <div class="k"><span>Scientific / cinematic style</span><span><kbd>G</kbd></span></div>
+    <div class="k"><span>GNC vectors &amp; PIP / Seeker PiP</span><span><kbd>X</kbd><kbd>P</kbd></span></div>
     <div class="k"><span>Layers</span><span><kbd>R</kbd><kbd>K</kbd><kbd>E</kbd><kbd>L</kbd><kbd>H</kbd><kbd>M</kbd></span></div>
   </div>
   <p>Drag anywhere in the scene to spin the camera and scroll to zoom; right-drag pans. Grabbing a chase camera keeps the orbit centered on that vehicle. Press <kbd>C</kbd>, <kbd>T</kbd>, <kbd>I</kbd> or <kbd>V</kbd> to hand the camera back.</p>

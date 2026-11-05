@@ -3,18 +3,19 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  D, G_KM, N, P, burnT, defR, impactPos, impactT, killPos, killT, launchT, locate, pipPos,
-  sample, tEnd, terminalT, threatStart, tStart, velocity,
+  D, GNC, G_KM, N, P, burnT, cpaMidPos, defR, divertBudget, impactPos, impactT, killPos, killT,
+  launchT, locate, missCpaT, pipPos, sample, tEnd, terminalT, threatStart, tStart, velocity,
 } from './data.js';
 import { camLookTarget, hashArgs, realClock, state } from './state.js';
 import { $, fmtSpd, toast } from './dom.js';
 import {
-  DOME_OPACITY, battery, camera, cloudMat, composer, controls, domeMat, dropI, dropT, gridLabels,
-  impactMarker, killMarker, labelRenderer, lblBattery, lblImpact, lblKV, lblKill, lblPip, lblThreat,
-  refGeo, scene, setDrop, sky, smooth, terrainMat,
+  DOME_OPACITY, battery, camera, cloudMat, composer, controls, cpaMarker, domeMat, dropI, dropT, gridLabels,
+  impactMarker, killMarker, labelRenderer, lblBattery, lblCpa, lblImpact, lblKV, lblKill, lblPip, lblThreat,
+  refGeo, renderer, scene, seekerCam, setDrop, sky, smooth, terrainMat,
 } from './scene.js';
 import {
   beamLine, impactFx, killFx, losLine, radarPts, radarUniforms, setLine, trackTrail, trailUniforms,
+  updateGncEffects,
 } from './effects.js';
 import { kvObj, spentBooster, threatObj } from './models.js';
 import { covSigma3, updateCovariance } from './covariance.js';
@@ -43,13 +44,13 @@ function placeLabel(lbl, pos, preferLeft) {
 }
 
 // Fade 3D labels while they sit under a HUD panel instead of drawing over or behind it
-const SIDE_PANELS = ['brand', 'bda', 'events', 'profilebox'].map((id) => $(id)).concat([...document.querySelectorAll('#telemetry .inst')]);
+const SIDE_PANELS = ['brand', 'bda', 'pip-box', 'events', 'profilebox'].map((id) => $(id)).concat([...document.querySelectorAll('#telemetry .inst')]);
 const FIXED_PANELS = ['mission', 'transport', 'analysis'].map((id) => $(id));
 let sceneLabels = null;
 function fadeLabelsUnderPanels() {
-  sceneLabels ??= [lblThreat, lblKV, lblBattery, lblPip, lblKill, lblImpact, ...gridLabels];
+  sceneLabels ??= [lblThreat, lblKV, lblBattery, lblPip, lblKill, lblImpact, lblCpa, ...gridLabels].filter(Boolean);
   const panels = document.body.classList.contains('focus') ? FIXED_PANELS : FIXED_PANELS.concat(SIDE_PANELS);
-  const rects = panels.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
+  const rects = panels.filter(Boolean).map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
   sceneLabels.forEach((o) => {
     if (!o.visible) return;
     const r = o.userData.inner.getBoundingClientRect();
@@ -91,7 +92,11 @@ function update(time, dtReal) {
   {
     const heat = threatObj.userData.heat;
     const spd = tv.length();
+    const atmDensity = Math.exp(-Math.max(0, tp.y) / 18);
     heat.material.opacity = THREE.MathUtils.clamp((spd - 1.2) * 0.9, 0.15, 1) * (0.85 + Math.random() * 0.15);
+    if (threatObj.userData.shockCone) {
+      threatObj.userData.shockCone.material.opacity = THREE.MathUtils.clamp((spd - 1.0) * 0.16 * (0.35 + 0.65 * atmDensity), 0.04, 0.28);
+    }
   }
   updateCovariance(layers.cov && threatAlive, fi, tp);
 
@@ -115,9 +120,39 @@ function update(time, dtReal) {
     ud.plume.scale.setScalar(0.08 * (0.9 + Math.random() * 0.2));
   }
   const g = launched ? (D.g[Math.min(fi + 1, N - 1)] || 0) : 0;
-  ud.divert.visible = launched && stage === 2 && g > 1.5 && Math.random() > 0.35;
+  const dvExhausted = divertBudget != null && (GNC.dvUsed[fi] || 0) >= divertBudget - 0.5;
+  const dacsFiring = launched && stage === 2 && g > 0.8 && !dvExhausted;
+  ud.divert.visible = dacsFiring && Math.random() > 0.25;
+  if (ud.dacsJet) {
+    ud.dacsJet.visible = dacsFiring;
+    if (dacsFiring) {
+      const k3 = 3 * fi;
+      tmpA.set(GNC.acScene[k3], GNC.acScene[k3 + 1], GNC.acScene[k3 + 2]);
+      // Project perpendicular to velocity iv so the DACS jet fires purely laterally
+      if (iv.lengthSq() > 1e-8) {
+        tmpB.copy(iv).normalize();
+        tmpA.addScaledVector(tmpB, -tmpA.dot(tmpB));
+      }
+      if (tmpA.lengthSq() > 1e-6) {
+        // Thruster plume exhausts opposite to the commanded acceleration vector
+        tmpA.normalize().negate();
+        ud.dacsJet.lookAt(tmpLook.copy(ip).add(tmpA));
+        const jetScale = THREE.MathUtils.clamp(0.45 + (g / 15) * 0.85, 0.45, 1.5) * (0.85 + Math.random() * 0.3);
+        ud.dacsJet.scale.set(1, 1, jetScale);
+      } else {
+        ud.dacsJet.visible = false;
+      }
+    }
+  }
   ud.far.material.color.copy(boosting ? ud.farBoost : ud.farCoast);
   ud.far.scale.setScalar(launched ? (boosting ? 0.04 : 0.028) : 0.012);
+
+  // 3D GNC vectors, dynamic PIP footprint, ballistic arcs & CPA endgame geometry
+  updateGncEffects({
+    visible: layers.vectors,
+    time, fi, tp, ip, tv, iv, launched, stage, g, threatAlive, kvAlive,
+    camPos: camera.position,
+  });
 
   // Spent booster
   if (burnT != null && time >= burnT && time < burnT + 30) {
@@ -142,6 +177,7 @@ function update(time, dtReal) {
   }
   killMarker.visible = sciStyle && killed;
   impactMarker.visible = sciStyle && impacted;
+  if (cpaMarker) cpaMarker.visible = sciStyle && missCpaT != null && time >= missCpaT;
   dropT.visible = sciStyle && threatAlive;
   if (dropT.visible) setDrop(dropT, tp);
   dropI.visible = sciStyle && launched && kvAlive;
@@ -177,7 +213,33 @@ function update(time, dtReal) {
   lblPip.visible = showLabels && !!pipPos && launched && !killed;
   lblKill.visible = showLabels && killed;
   lblImpact.visible = showLabels && impacted;
+  if (lblCpa) lblCpa.visible = showLabels && missCpaT != null && time >= missCpaT;
   gridLabels.forEach((o) => { o.visible = sciStyle && showLabels && (o.userData.kind === 'map') === (state.camMode === 'top'); });
+
+  // Update Seeker Picture-in-Picture camera pose
+  if (layers.pip) {
+    if (!launched) {
+      seekerCam.position.set(0, 0.12, 0.08);
+      seekerCam.fov = 1.8;
+      seekerCam.lookAt(threatAlive ? tp : (impactPos || tp));
+    } else if (!killed && !impacted) {
+      // Mount slightly ahead of KV nose along its look direction so KV mesh doesn't occlude
+      tmpA.copy(tp).sub(ip);
+      const dist = tmpA.length();
+      if (dist > 1e-4) tmpA.divideScalar(dist);
+      else if (iv.lengthSq() > 1e-8) tmpA.copy(iv).normalize();
+      else tmpA.set(0, 1, 0);
+      seekerCam.position.copy(ip).addScaledVector(tmpA, 0.018);
+      seekerCam.fov = THREE.MathUtils.clamp(dist > 0.05 ? Math.min(6.0, Math.max(0.8, 12 / dist)) : 6.0, 0.8, 6.0);
+      seekerCam.lookAt(tp);
+    } else {
+      const focusPt = killed ? killPos : (cpaMidPos || impactPos || tp);
+      seekerCam.position.copy(focusPt).add(tmpA.set(0.35, 0.18, 0.45));
+      seekerCam.fov = 3.5;
+      seekerCam.lookAt(focusPt);
+    }
+    seekerCam.updateProjectionMatrix();
+  }
 
   // Camera
   if (state.camMode === 'orbit') {
@@ -246,6 +308,7 @@ window.thaadReplay = {
 // ============================================================================
 // LOOP
 // ============================================================================
+const pipViewEl = $('pip-view');
 let last = performance.now();
 function frame(now) {
   const dtReal = Math.min(0.05, (now - last) / 1000);
@@ -256,6 +319,32 @@ function frame(now) {
   }
   update(state.simTime, dtReal);
   composer.render();
+
+  if (state.layers.pip && pipViewEl && !document.body.classList.contains('focus') && !state.analysisOpen) {
+    const r = pipViewEl.getBoundingClientRect();
+    if (r.width > 10 && r.height > 10) {
+      const h = window.innerHeight;
+      const vx = Math.round(r.left);
+      const vy = Math.round(h - r.bottom);
+      const vw = Math.round(r.width);
+      const vh = Math.round(r.height);
+      seekerCam.aspect = vw / vh;
+      seekerCam.updateProjectionMatrix();
+      const prevAutoClear = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.setViewport(vx, vy, vw, vh);
+      renderer.setScissor(vx, vy, vw, vh);
+      renderer.setScissorTest(true);
+      renderer.clearDepth();
+      sky.position.copy(seekerCam.position);
+      renderer.render(scene, seekerCam);
+      sky.position.copy(camera.position);
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, window.innerWidth, h);
+      renderer.autoClear = prevAutoClear;
+    }
+  }
+
   labelRenderer.render(scene, camera);
   requestAnimationFrame(frame);
 }

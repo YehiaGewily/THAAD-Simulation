@@ -1,7 +1,7 @@
 // The camera director: where each directed camera (cinematic, chase threat,
 // chase interceptor, top-down) wants to be at a given moment.
 import * as THREE from 'three';
-import { impactPos, killPos, threatStart } from './data.js';
+import { cpaMidPos, impactPos, killPos, missCpaT, threatStart } from './data.js';
 import { realClock, state } from './state.js';
 
 // ============================================================================
@@ -63,6 +63,21 @@ export function shot(st) {
     desiredPos.copy(sideDir).multiplyScalar(5).addScaledVector(trackDir, -2).setY(1.2);
     desiredPos.y += ip.y * 0.4;
     desiredTarget.copy(ip);
+    return;
+  }
+  // If the interceptor missed at CPA, linger on the CPA crossing briefly, then follow the threat to impact
+  if (missCpaT != null && st.time >= missCpaT) {
+    const post = st.time - missCpaT;
+    if (post < 1.6 && cpaMidPos) {
+      desiredPos.copy(cpaMidPos).addScaledVector(sideDir, 0.95).addScaledVector(UP, 0.32);
+      desiredTarget.copy(tp);
+      return;
+    }
+    const vdir = tmpA.copy(tv).normalize();
+    if (vdir.lengthSq() < 0.5) vdir.set(0, -1, 0);
+    desiredPos.copy(tp).addScaledVector(vdir, -2.2).addScaledVector(sideDir, 1.8).addScaledVector(UP, 0.9);
+    desiredPos.y = Math.max(desiredPos.y, 0.4);
+    desiredTarget.copy(tp);
     return;
   }
   const ttg = st.ttg;
