@@ -72,8 +72,11 @@ def run(cfg, rng, console=None):
     hist = {k: [] for k in HIST_KEYS}
     outcome = "UNKNOWN"
     kill_info = {}
+    cpa_info = None
     launch_pip = None
     min_sep = None   # closest approach over all steps since launch, from the CPA check
+    nees_hist = []
+    nis_hist = []
 
     console.print("\n" + "="*60, style="bold blue")
     console.print(f"[bold green]{cfg.title}[/bold green]")
@@ -89,6 +92,8 @@ def run(cfg, rng, console=None):
         kf_err = np.hstack((ep - threat.pos, ev - threat.vel))
         kf_sig = np.sqrt(np.diag(kf.P))
         kf_cov = kf.P[POS_COV_INDEX]
+        nees_hist.append(float(kf_err @ np.linalg.solve(kf.P, kf_err)))
+        nis_hist.append(kf.nis)
 
         # Launch once the track is mature and the threat is descending. The
         # PIP-gated rule also requires the predicted impact point to fall
@@ -132,7 +137,18 @@ def run(cfg, rng, console=None):
         t_v = (threat.pos - t_p0) / window
         if interceptor.launched and not interceptor.exploded:
             t_off, d_min = get_cpa(i_p0, i_v, t_p0, t_v, window)
-            min_sep = d_min if min_sep is None else min(min_sep, d_min)
+            if min_sep is None or d_min < min_sep:
+                min_sep = d_min
+                cpa_pos_t = t_p0 + t_v * t_off
+                cpa_pos_i = i_p0 + i_v * t_off
+                cpa_info = {
+                    'time': t + t_off,
+                    'alt': float(cpa_pos_t[2]),
+                    'dist': float(d_min),
+                    'closing': float(np.linalg.norm(i_v - t_v)),
+                    't_pos': cpa_pos_t.copy(),
+                    'i_pos': cpa_pos_i.copy(),
+                }
             if d_min < eng.kill_radius:
                 interceptor.exploded = True
                 k_time  = t + t_off
@@ -213,12 +229,15 @@ def run(cfg, rng, console=None):
         'integrator':      cfg.sim.integrator,
         'outcome':         outcome,
         'kill':            kill_info or None,
+        'cpa':             cpa_info,
         'launch_pip':      launch_pip,
         'launch_time':     interceptor.launch_time if interceptor.launched else None,
         'min_separation':  min_sep,
         'divert_dv_used':  interceptor.divert_dv_used,
         'impact':          threat.pos.copy() if outcome in ("GROUND", "NO ENGAGE") else None,
         'g_hist':          interceptor.g_hist,
+        'nees':            nees_hist,
+        'nis':             nis_hist,
         'defended_radius': eng.defended_radius,
         'kill_radius':     eng.kill_radius,
         'max_g':           cfg.interceptor.max_g,

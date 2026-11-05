@@ -51,6 +51,18 @@ def build_payload(hist):
             'pos': _xyz(hist['t_pos'][-1]),
         }
 
+    cpa = None
+    if meta.get('cpa'):
+        c = meta['cpa']
+        cpa = {
+            'time': round(float(c['time']), 3),
+            'alt': round(float(c['alt']), 1),
+            'dist': round(float(c['dist']), 2),
+            'closing': round(float(c['closing']), 1),
+            'tPos': _xyz(c['t_pos']),
+            'iPos': _xyz(c['i_pos']),
+        }
+
     return {
         'title': meta['title'],
         'mode': meta['mode'],
@@ -67,10 +79,13 @@ def build_payload(hist):
         'kfErr': _flat_fine(hist['kf_err']),
         'kfSig': _flat_fine(hist['kf_sig']),
         'kfCov': _flat_fine(hist['kf_cov']),   # position covariance xx, yy, zz, xy, xz, yz, m^2
+        'nees': [round(float(v), 2) for v in meta.get('nees', [])],
+        'nis': [None if v is None else round(float(v), 2) for v in meta.get('nis', [])],
         'status': status,
         'stage': [STAGE_CODES[s] for s in hist['stage']],
         'g': g,
         'kill': kill,
+        'cpa': cpa,
         'launchPip': _xyz(meta['launch_pip']),
         'impact': _xyz(meta['impact']),
         'defendedRadius': meta['defended_radius'],
