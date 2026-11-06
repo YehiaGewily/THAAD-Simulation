@@ -23,7 +23,7 @@ function newestPayload({ id, dir }) {
   if (!fs.existsSync(folder)) return null;
   const files = fs.readdirSync(folder).filter((f) => f.endsWith('.html'))
     .map((f) => path.join(folder, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-  const re = new RegExp(`<script id="${id}" type="application/json">([\s\S]*?)</script>`);
+  const re = new RegExp(`<script id="${id}" type="application/json">([\\s\\S]*?)</script>`);
   for (const f of files) {
     const m = fs.readFileSync(f, 'utf-8').match(re);
     if (m && !m[1].startsWith('__')) return m[1];

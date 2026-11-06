@@ -173,12 +173,32 @@ export function buildAnalysis() {
     refs: [{ y: 6.0, label: 'E[χ²₆] = 6' }, { y: 14.45, label: '95 % bound 14.4' }],
     caption: 'Normalized estimation error squared ε = eᵀP⁻¹e and innovation squared ε<sub>ν</sub> = νᵀS⁻¹ν. Unmodeled drag drives NEES above the χ²₆ bound early in flight.',
   });
+  const pipSeries = D.pipMode === 'drag'
+    ? [
+        { label: 'Drag-integrated PIP (EKF)', color: SER.eng, data: GNC.pipBias },
+        { label: 'Vacuum PIP (uncorrected)', color: SER.threat, data: GNC.pipVacBias, dash: [4, 3] },
+      ]
+    : [{ label: '‖PIP(t) − r_imp‖', color: SER.eng, data: GNC.pipBias }];
   const pipFig = figure(kf, 'kf', {
-    title: 'Predicted impact point (PIP) drag-mismatch bias', unit: 'm', fmt: fmtSig('m'), log: true,
-    series: [{ label: '‖PIP(t) − r_imp‖', color: SER.eng, data: GNC.pipBias }],
-    caption: 'Distance between the filter\'s instantaneous drag-free ground crossing (PIP) and the true dragged impact point. Unmodeled drag causes a kilometre-scale downrange overshoot early in flight that shrinks as the threat decelerates.',
+    title: D.pipMode === 'drag' ? 'Predicted impact point (PIP) error: Drag-integrated vs Vacuum' : 'Predicted impact point (PIP) drag-mismatch bias',
+    unit: 'm', fmt: fmtSig('m'), log: true,
+    series: pipSeries,
+    caption: D.pipMode === 'drag'
+      ? 'Integrating the ground crossing with the EKF\'s estimated drag k̂_T eliminates the kilometre-scale downrange overshoot of the vacuum predictor.'
+      : 'Distance between the filter\'s instantaneous drag-free ground crossing (PIP) and the true dragged impact point. Unmodeled drag causes a kilometre-scale downrange overshoot early in flight that shrinks as the threat decelerates.',
   });
-  pipFig.el.style.gridColumn = '1 / -1';
+  if (Array.isArray(D.estDrag) && D.estDrag.length === N) {
+    const trueDragKm = (PRM.threat_drag ?? 0.00004) * 1e5;
+    figure(kf, 'kf', {
+      title: '7-state EKF ballistic drag estimation (k̂_T)',
+      unit: '×10⁻⁵/m', fmt: fmtU('×10⁻⁵/m', 2), thin: true, yMin: 0,
+      series: [{ label: 'Estimated k̂_T', color: SER.kv, data: GNC.estDrag }],
+      refs: [{ y: trueDragKm, label: `true k_T = ${trueDragKm.toFixed(1)}` }],
+      caption: 'Real-time estimate of the threat\'s quadratic drag coefficient k_T from the 7-state Extended Kalman Filter.',
+    });
+  } else {
+    pipFig.el.style.gridColumn = '1 / -1';
+  }
 
   buildMethods();
 }
@@ -193,16 +213,27 @@ function fmtParam(v) {
   if (a < 1e-2) { const e = Math.floor(Math.log10(a)); return `${+(v / 10 ** e).toFixed(2)} × 10<sup>${e}</sup>`; }
   return v.toLocaleString('en-US', { maximumSignificantDigits: 6 });
 }
-const DEFAULT_CONFIGS = { 'ENGINEERING MODE': 'configs/engineering.yaml', 'MAX-PERFORMANCE MODE': 'configs/demo.yaml' };
+const DEFAULT_CONFIGS = {
+  'ENGINEERING MODE': 'configs/engineering.yaml',
+  'MAX-PERFORMANCE MODE': 'configs/demo.yaml',
+  'ADVANCED GNC MODE': 'configs/advanced.yaml',
+};
 
 function buildMethods() {
   const p = PRM;
   const gated = D.engageRule === 'PIP-GATED LAUNCH';
+  const isEkf7 = D.filterType === 'ekf7';
+  const isRae = D.sensorModel === 'rae';
+  const isDragPip = D.pipMode === 'drag';
+  const gLaw = D.guidanceLaw || 'pn';
   const PARAMS = [
     ['dt', String.raw`\Delta t`, 'Integration time step', 's'],
     ['g', 'g', 'Gravitational acceleration', 'm/s²'],
     ['pos_noise', String.raw`\sigma_p`, 'Radar position noise, 1σ per axis', 'm'],
     ['vel_noise', String.raw`\sigma_v`, 'Radar velocity noise, 1σ per axis', 'm/s'],
+    ['range_noise', String.raw`\sigma_\rho`, 'RAE radar range noise, 1σ', 'm'],
+    ['angle_noise', String.raw`\sigma_\theta`, 'RAE radar angular noise, 1σ', 'rad'],
+    ['range_rate_noise', String.raw`\sigma_{\dot\rho}`, 'RAE radar Doppler range-rate noise, 1σ', 'm/s'],
     ['kf_q', 'q', 'White-noise acceleration spectral density, per axis', 'm²/s³'],
     ['threat_drag', 'k_T', 'Threat drag coefficient', '1/m'],
     ['boost_thrust', 'F_T', 'Boost thrust', 'N'],
@@ -215,6 +246,7 @@ function buildMethods() {
     ['booster_drag', 'k_B', 'Booster drag coefficient', 'kg/m'],
     ['kv_drag', String.raw`k_{KV}`, 'Kill-vehicle drag coefficient', 'kg/m'],
     ['pn_gain', 'N', 'Navigation constant', '—'],
+    ['tau', String.raw`\tau`, '1st-order actuator lag time constant', 's'],
     ['max_g', String.raw`n_{max}`, 'Acceleration limit', 'g'],
     ['kv_divert_dv', String.raw`\Delta v_{KV}`, 'Kill-vehicle divert budget', 'm/s'],
     ['kill_radius', 'R_k', 'Kill radius', 'm'],
@@ -227,6 +259,45 @@ function buildMethods() {
   const configArg = /\s/.test(config) ? `"${config}"` : config;
   const cmd = D.seed != null ? `python -m thaad_sim --config ${configArg} --seed ${D.seed}${D.legacyRng ? ' --legacy-rng' : ''}` : '';
   const rk4 = D.integrator !== 'euler';
+  const guidanceHeading = gLaw === 'apn'
+    ? 'Guidance: augmented proportional navigation (APN)'
+    : gLaw === 'zem'
+      ? 'Guidance: zero-effort miss (ZEM) optimal guidance'
+      : 'Guidance: proportional navigation';
+  const guidanceBody = gLaw === 'apn' ? `
+      <p>Augmented Proportional Navigation (APN) using the relative state r = r̂<sub>T</sub> − r<sub>I</sub>, v = v̂<sub>T</sub> − v<sub>I</sub>, and the EKF's estimated target drag acceleration â<sub>T</sub> = −k̂<sub>T</sub> ‖v̂<sub>T</sub>‖ v̂<sub>T</sub> normal to the line of sight. During boost, +g ẑ is added to loft the booster; during free-fall coast, uniform gravity cancels between free-falling bodies${p.kv_divert_dv ? ', preserving the kill-vehicle divert budget' : ''}.</p>
+      <div class="eq">${tex(String.raw`\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad \mathbf a_{T,\perp} = \hat{\mathbf a}_T - (\hat{\mathbf a}_T\cdot\hat{\mathbf r})\,\hat{\mathbf r},\qquad \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + \tfrac12 N\,\mathbf a_{T,\perp} + g_{\text{boost}}\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
+      ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}
+      <p>The <b>GNC vectors &amp; PIP</b> layer (<kbd>X</kbd>) draws the 3D velocity vectors, the commanded lateral acceleration vector a<sub>c</sub> (turning coral when g-saturated), and the zero-effort miss (ZEM) vector bar in the scene.</p>`
+    : gLaw === 'zem' ? `
+      <p>Zero-Effort Miss (ZEM) guidance drives the acceleration-compensated normal miss distance ZEM<sub>⊥</sub> to zero over the estimated time-to-go t<sub>go</sub>.</p>
+      <div class="eq">${tex(String.raw`\mathbf{ZEM} = \mathbf r + \mathbf v\,t_{go} + \tfrac12\hat{\mathbf a}_T\,t_{go}^2,\qquad \mathbf a_c = \frac{N}{t_{go}^2}\,\mathbf{ZEM}_\perp + g_{\text{boost}}\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
+      ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}
+      <p>The <b>GNC vectors &amp; PIP</b> layer (<kbd>X</kbd>) draws the 3D velocity vectors, the commanded lateral acceleration vector a<sub>c</sub> (turning coral when g-saturated), and the zero-effort miss (ZEM) vector bar in the scene.</p>`
+    : `
+      <p>Relative state from the Kalman estimate of the threat, r = r̂<sub>T</sub> − r<sub>I</sub> and v = v̂<sub>T</sub> − v<sub>I</sub>. The command includes a gravity bias and is capped at n<sub>max</sub>·g${p.kv_divert_dv ? '. The kill vehicle has a finite divert budget' : ''}.</p>
+      <div class="eq">${tex(String.raw`\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
+      ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}
+      <p>The <b>GNC vectors &amp; PIP</b> layer (<kbd>X</kbd>) draws the 3D velocity vectors, the commanded lateral acceleration vector a<sub>c</sub> (turning coral when g-saturated), and the zero-effort miss (ZEM) vector bar in the scene. On the Guidance tab, both the true and the filter-perceived LOS rate and ZEM are plotted so estimation noise and drag mismatch can be compared directly.</p>`;
+
+  const trackingHeading = isEkf7 ? 'Tracking: 7-state Extended Kalman Filter (EKF)' : 'Tracking: Kalman filter';
+  const trackingBody = isEkf7 ? `
+      <p>Seven-state Extended Kalman Filter estimating threat position, velocity, and quadratic drag parameter k<sub>T</sub> online. State propagation integrates the nonlinear dragged dynamics via RK4 and propagates the 7×7 covariance with the analytic Jacobian F<sub>k</sub> = I + A(x̂) Δt + ½ A(x̂)² Δt².</p>
+      <div class="eq">${tex(String.raw`\mathbf x = \begin{bmatrix}\mathbf p^\top & \mathbf v^\top & k_T\end{bmatrix}^\top,\qquad \frac{\partial\dot{\mathbf v}}{\partial\mathbf v} = -k_T\left(\lVert\mathbf v\rVert I_3 + \frac{\mathbf v\mathbf v^\top}{\lVert\mathbf v\rVert}\right),\qquad \frac{\partial\dot{\mathbf v}}{\partial k_T} = -\lVert\mathbf v\rVert\mathbf v`)}</div>
+      <p>${isRae ? 'The radar observes polar Range–Azimuth–Elevation (RAE) and Doppler range-rate, mapped into ENU with the exact beam-aligned 6×6 covariance R(p) = T R<sub>polar</sub> T<sup>⊤</sup> (pancake uncertainty widest cross-range).' : 'The radar observes Cartesian position and velocity directly with isotropic Gaussian noise.'} Joseph-form covariance updates preserve symmetry and positive definiteness.</p>`
+    : `
+      <p>Six-state linear filter. The threat moves under known gravity, entered as a control input, and is perturbed by continuous white-noise acceleration of spectral density q on each axis. The radar observes position and velocity directly (H = I) with independent Gaussian noise. The first measurement initializes the state, with P₀ = R.</p>
+      <div class="eq">${tex(String.raw`\mathbf x = \begin{bmatrix}\mathbf p\\ \mathbf v\end{bmatrix},\quad F = \begin{bmatrix} I & \Delta t\, I\\ 0 & I\end{bmatrix},\quad B = \begin{bmatrix} \tfrac12\Delta t^2 I\\ \Delta t\, I\end{bmatrix},\quad \mathbf u = -g\,\hat{\mathbf z},\quad R = \operatorname{diag}(\sigma_p^2 I,\ \sigma_v^2 I)`)}</div>
+      <div class="eq">${tex(String.raw`Q = q\begin{bmatrix} \tfrac13\Delta t^3 I & \tfrac12\Delta t^2 I\\ \tfrac12\Delta t^2 I & \Delta t\, I\end{bmatrix}`)}</div>
+      <div class="eq">${tex(String.raw`\mathbf x^- = F\mathbf x + B\mathbf u,\qquad P^- = F P F^\top + Q`)}</div>
+      <div class="eq">${tex(String.raw`S = H P^- H^\top + R,\qquad K = P^- H^\top S^{-1},\qquad \mathbf x = \mathbf x^- + K\boldsymbol\nu,\quad \boldsymbol\nu = \mathbf z - H\mathbf x^-`)}</div>
+      <div class="eq">${tex(String.raw`P = (I - K H)\,P^-\,(I - K H)^\top + K R K^\top`)}</div>
+      <p>Q is the white-noise acceleration integrated over one step. K comes from a linear solve with S rather than an explicit inverse, and the Joseph-form update keeps P symmetric and positive definite for any gain.</p>
+      <p>The <b>Track uncertainty</b> layer (<kbd>E</kbd>) draws the 3σ position ellipsoid from the position block of P, with semi-axes 3√λ along its eigenvectors. It is drawn 10× larger about the true position, the estimate's offset included, so the threat is inside the shell exactly when the estimate error is within 3σ. With H = I and equal noise on every axis, P stays isotropic and the ellipsoid is a sphere.</p>
+      <p>Consistency is checked with the normalized estimation error squared (NEES) and the normalized innovation squared (NIS). For a consistent filter both are χ² with 6 degrees of freedom; averaged over N independent runs, N times the average is χ² with 6N degrees of freedom.</p>
+      <div class="eq">${tex(String.raw`\epsilon = (\hat{\mathbf x} - \mathbf x)^\top P^{-1} (\hat{\mathbf x} - \mathbf x),\qquad \epsilon_\nu = \boldsymbol\nu^\top S^{-1} \boldsymbol\nu,\qquad \mathbb E[\epsilon] = \mathbb E[\epsilon_\nu] = 6`)}</div>
+      <p>The filter does not model drag, but the threat has it. With drag off and the truth driven by the same Q, NEES and NIS stay inside their 95 % bounds. Against the dragged threat the filter is overconfident early in the flight, while drag is strongest. <code>scripts/filter_consistency.py</code> plots both cases.</p>`;
+
   const sections = [
     ['Frame and integration', `
       <p>Flat-Earth east–north–up frame (x east, y north, z up) in SI units, constant gravity. Each body's state (position and velocity, plus mass for the interceptor) is advanced as one first-order system ẋ = f(x) with ${rk4 ? 'the classical fourth-order Runge–Kutta method (RK4)' : 'forward Euler'} at Δt = ${p.dt} s${rk4 ? '; the global error falls as Δt⁴' : '; the global error falls as Δt'}.</p>
@@ -242,27 +313,13 @@ function buildMethods() {
       <div class="eq">${tex(String.raw`m\,\ddot{\mathbf r}_I = F_T\,\hat{\mathbf a}_c - m g\,\hat{\mathbf z} - k\,\lVert\dot{\mathbf r}_I\rVert\,\dot{\mathbf r}_I + \eta\, m\,\mathbf a_c,\qquad \eta = \begin{cases}0.1 & t < t_b\\ 1 & t \ge t_b\end{cases}`)}</div>
       <div class="eq">${tex(String.raw`\dot m = -\frac{F_T}{I_{sp}\,g_0}\ \ (t < t_b),\qquad t_b = \frac{(m_0 - m_b)\,I_{sp}\,g_0}{F_T},\qquad m(t_b^+) = m_{KV},\quad F_T = 0,\ \dot m = 0\ \ (t > t_b)`)}</div>
       <p>With no gravity or drag this gives the rocket equation, Δv = I<sub>sp</sub> g<sub>0</sub> ln(m<sub>0</sub>/m<sub>b</sub>), with g<sub>0</sub> = 9.80665 m/s².</p>`],
-    ['Guidance: proportional navigation', `
-      <p>Relative state from the Kalman estimate of the threat, r = r̂<sub>T</sub> − r<sub>I</sub> and v = v̂<sub>T</sub> − v<sub>I</sub>. The command includes a gravity bias and is capped at n<sub>max</sub>·g${p.kv_divert_dv ? '. The kill vehicle has a finite divert budget' : ''}.</p>
-      <div class="eq">${tex(String.raw`\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z},\qquad \lVert\mathbf a_c\rVert \le n_{max}\,g`)}</div>
-      ${p.kv_divert_dv ? `<div class="eq">${tex(String.raw`\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \;\le\; \Delta v_{KV}`)}</div>` : ''}
-      <p>The <b>GNC vectors &amp; PIP</b> layer (<kbd>X</kbd>) draws the 3D velocity vectors, the commanded lateral acceleration vector a<sub>c</sub> (turning coral when g-saturated), and the zero-effort miss (ZEM) vector bar in the scene. On the Guidance tab, both the true and the filter-perceived LOS rate and ZEM are plotted so estimation noise and drag mismatch can be compared directly.</p>`],
-    ['Tracking: Kalman filter', `
-      <p>Six-state linear filter. The threat moves under known gravity, entered as a control input, and is perturbed by continuous white-noise acceleration of spectral density q on each axis. The radar observes position and velocity directly (H = I) with independent Gaussian noise. The first measurement initializes the state, with P₀ = R.</p>
-      <div class="eq">${tex(String.raw`\mathbf x = \begin{bmatrix}\mathbf p\\ \mathbf v\end{bmatrix},\quad F = \begin{bmatrix} I & \Delta t\, I\\ 0 & I\end{bmatrix},\quad B = \begin{bmatrix} \tfrac12\Delta t^2 I\\ \Delta t\, I\end{bmatrix},\quad \mathbf u = -g\,\hat{\mathbf z},\quad R = \operatorname{diag}(\sigma_p^2 I,\ \sigma_v^2 I)`)}</div>
-      <div class="eq">${tex(String.raw`Q = q\begin{bmatrix} \tfrac13\Delta t^3 I & \tfrac12\Delta t^2 I\\ \tfrac12\Delta t^2 I & \Delta t\, I\end{bmatrix}`)}</div>
-      <div class="eq">${tex(String.raw`\mathbf x^- = F\mathbf x + B\mathbf u,\qquad P^- = F P F^\top + Q`)}</div>
-      <div class="eq">${tex(String.raw`S = H P^- H^\top + R,\qquad K = P^- H^\top S^{-1},\qquad \mathbf x = \mathbf x^- + K\boldsymbol\nu,\quad \boldsymbol\nu = \mathbf z - H\mathbf x^-`)}</div>
-      <div class="eq">${tex(String.raw`P = (I - K H)\,P^-\,(I - K H)^\top + K R K^\top`)}</div>
-      <p>Q is the white-noise acceleration integrated over one step. K comes from a linear solve with S rather than an explicit inverse, and the Joseph-form update keeps P symmetric and positive definite for any gain.</p>
-      <p>The <b>Track uncertainty</b> layer (<kbd>E</kbd>) draws the 3σ position ellipsoid from the position block of P, with semi-axes 3√λ along its eigenvectors. It is drawn 10× larger about the true position, the estimate's offset included, so the threat is inside the shell exactly when the estimate error is within 3σ. With H = I and equal noise on every axis, P stays isotropic and the ellipsoid is a sphere.</p>
-      <p>Consistency is checked with the normalized estimation error squared (NEES) and the normalized innovation squared (NIS). For a consistent filter both are χ² with 6 degrees of freedom; averaged over N independent runs, N times the average is χ² with 6N degrees of freedom.</p>
-      <div class="eq">${tex(String.raw`\epsilon = (\hat{\mathbf x} - \mathbf x)^\top P^{-1} (\hat{\mathbf x} - \mathbf x),\qquad \epsilon_\nu = \boldsymbol\nu^\top S^{-1} \boldsymbol\nu,\qquad \mathbb E[\epsilon] = \mathbb E[\epsilon_\nu] = 6`)}</div>
-      <p>The filter does not model drag, but the threat has it. With drag off and the truth driven by the same Q, NEES and NIS stay inside their 95 % bounds. Against the dragged threat the filter is overconfident early in the flight, while drag is strongest. <code>scripts/filter_consistency.py</code> plots both cases.</p>`],
-    ['Launch decision', gated ? `
+    [guidanceHeading, guidanceBody],
+    [trackingHeading, trackingBody],
+    ['Launch decision', gated ? (isDragPip ? `
+      <p>The predicted impact point (PIP) is integrated forward to ground crossing (z = 0) via RK4 using the EKF's online drag estimate k̂<sub>T</sub>, eliminating the early downrange bias of the vacuum parabola. The interceptor launches once the track is at least t<sub>trk</sub> old, the threat is descending, and the drag-integrated PIP is inside the defended radius R<sub>D</sub>.</p>` : `
       <p>The predicted impact point (PIP) is the ballistic ground crossing from the current estimate, ignoring drag. The interceptor launches once the track is at least t<sub>trk</sub> old, the threat is descending and the PIP is inside the defended radius.</p>
       <p>Because drag is ignored, the PIP lies beyond the true impact point and the predicted time to impact is too short. The bias is kilometres early in flight and shrinks to metres in the last ten seconds; <code>scripts/drag_mismatch.py</code> measures it.</p>
-      <div class="eq">${tex(String.raw`t^\ast = \frac{v_z + \sqrt{v_z^2 + 2 g z}}{g},\qquad \mathrm{PIP} = (x + v_x t^\ast,\ y + v_y t^\ast),\qquad \text{launch if } \lVert\mathrm{PIP}\rVert \le R_D`)}</div>` : `
+      <div class="eq">${tex(String.raw`t^\ast = \frac{v_z + \sqrt{v_z^2 + 2 g z}}{g},\qquad \mathrm{PIP} = (x + v_x t^\ast,\ y + v_y t^\ast),\qquad \text{launch if } \lVert\mathrm{PIP}\rVert \le R_D`)}</div>`) : `
       <p>This mode launches on the first descending track estimate after 3 s and does not gate on the predicted impact point. The PIP shown is for reference only.</p>`],
     ['Kill assessment', `
       <p>Within each step both bodies are taken to move along the straight chords between their integrated start and end positions; the closest point of approach inside the step decides the kill.</p>
@@ -278,10 +335,10 @@ function buildMethods() {
       <ul class="assume">
         <li>Flat Earth, constant gravity, no Earth rotation.</li>
         <li>Quadratic drag with constant coefficients: no atmosphere model or Mach dependence.</li>
-        <li>The radar measures Cartesian position and velocity directly; real sensors measure range and angles.</li>
-        <li>The Kalman filter and the impact predictor assume drag-free flight, while the threat has drag. The mismatch is not corrected: it biases the predicted impact point and makes the filter overconfident.</li>
+        <li>${isRae ? 'Polar RAE + Doppler radar model with beam-aligned 6×6 covariance; no clutter, dropouts, or track-initiation latency.' : 'The radar measures Cartesian position and velocity directly; switch to Advanced GNC Mode or use the Sim Lab (S) to enable polar RAE + Doppler radar.'}</li>
+        <li>${isEkf7 ? '7-state EKF estimates threat drag online and feeds the RK4 drag-integrated PIP predictor and APN guidance.' : 'The baseline 6-state Kalman filter and vacuum impact predictor assume drag-free flight, while the threat has drag. Switch to Advanced GNC Mode or use the Sim Lab (S) to enable the 7-state EKF and drag-integrated PIP.'}</li>
         <li>Drag uses a constant coefficient with no air-density model, so it acts at full strength even at 70 km altitude and overstates the deceleration of a real high-altitude threat.</li>
-        <li>Point-mass vehicles with no attitude dynamics, actuator lag or seeker model.</li>
+        <li>Point-mass vehicles with no 6-DOF attitude dynamics or seeker field-of-view limits${p.tau ? ` (1st-order actuator lag τ = ${p.tau} s active)` : ' (optional 1st-order actuator lag τ available in Sim Lab)'}.</li>
         <li>Constant thrust and specific impulse during boost. The kill vehicle's mass is held at m<sub>KV</sub>: its divert budget is a Δv limit, and divert propellant is not modeled.</li>
         <li>Analysis quantities (LOS rate, closing velocity, ZEM) are computed from the true states; guidance itself uses the Kalman estimate.</li>
         <li>Parameters are illustrative, not data for any real system.</li>

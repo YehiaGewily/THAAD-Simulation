@@ -53,10 +53,23 @@ function fadeLabelsUnderPanels() {
   const rects = panels.filter(Boolean).map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
   sceneLabels.forEach((o) => {
     if (!o.visible) return;
+    if (o.userData.kind === 'alt' && !keepOnScreen(o.userData.inner)) { o.element.style.opacity = '0'; return; }
     const r = o.userData.inner.getBoundingClientRect();
     const covered = rects.some((p) => r.left < p.right && r.right > p.left && r.top < p.bottom && r.bottom > p.top);
     o.element.style.opacity = covered ? '0' : '';
   });
+}
+// The altitude scale can sit at the very left edge in narrow views; slide its labels
+// right just enough to be read in full, instead of losing the "60 km" part off-screen.
+// When the scale is well off-screen the label is hidden rather than dragged into the scene.
+const LABEL_MARGIN = 8, LABEL_MAX_SHIFT = 72;
+function keepOnScreen(el) {
+  const prev = el._shift || 0;
+  const left = el.getBoundingClientRect().left - prev;
+  const need = Math.max(0, LABEL_MARGIN - left);
+  const shift = need <= LABEL_MAX_SHIFT ? need : 0;
+  if (shift !== prev) { el._shift = shift; el.style.translate = shift ? `${shift.toFixed(1)}px 0` : ''; }
+  return need <= LABEL_MAX_SHIFT;
 }
 const tmpLook = new THREE.Vector3();
 
@@ -294,7 +307,12 @@ function update(time, dtReal) {
 }
 setCam(CAMERAS.includes(hashArgs.get('cam')) ? hashArgs.get('cam') : 'cinematic', true);
 if (hashArgs.has('paused')) setPlaying(false);
-else setTimeout(() => toast('Press <kbd>?</kbd> for shortcuts · <kbd>F</kbd> hides the panels', 4500), 1200);
+else {
+  // Keyboard hints mean nothing on a touch screen; tell those visitors how to move the camera instead
+  const touch = window.matchMedia?.('(pointer: coarse)').matches;
+  const hint = touch ? 'Drag to orbit · pinch to zoom' : 'Press <kbd>?</kbd> for shortcuts · <kbd>F</kbd> hides the panels';
+  setTimeout(() => toast(hint, 4500), 1200);
+}
 
 // A small handle for scripted use (recording the README animation, smoke tests)
 window.thaadReplay = {

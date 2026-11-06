@@ -146,11 +146,13 @@ const terrainMat = (() => {
         float camD = length(cameraPosition - vW);
         float g10 = max(line(p.x / 10.0, 1.0), line(p.y / 10.0, 1.0));
         float g2 = max(line(p.x / 2.0, 1.0), line(p.y / 2.0, 1.0)) * (1.0 - smoothstep(15.0, 45.0, camD));
-        float gridFade = 1.0 - smoothstep(90.0, 160.0, r);
-        col += vec3(0.28, 0.38, 0.48) * (g10 * 0.16 + g2 * 0.06) * gridFade;
+        // Reference grid kept quiet so the trajectories stay the brightest lines in the frame;
+        // it also recedes with distance from the camera, where it would otherwise crowd into moire
+        float gridFade = (1.0 - smoothstep(90.0, 160.0, r)) * (1.0 - 0.55 * smoothstep(25.0, 110.0, camD));
+        col += vec3(0.28, 0.38, 0.48) * (g10 * 0.11 + g2 * 0.045) * gridFade;
 
         float rings = line(r / 10.0, 1.2) * (1.0 - smoothstep(50.0, 62.0, r));
-        col += vec3(0.3, 0.42, 0.52) * rings * 0.16;
+        col += vec3(0.3, 0.42, 0.52) * rings * 0.11 * gridFade;
 
         float dr = 1.0 - smoothstep(0.0, fwidth(r) * 2.0 + 0.04, abs(r - uDefR));
         dr *= clamp(0.12 / fwidth(r), 0.08, 1.0);  // dim the ring where it is seen edge-on
@@ -218,8 +220,10 @@ scene.add(clouds);
 // ---------------------------------------------------------------------------
 // Defended volume dome, battery, PIP marker
 // ---------------------------------------------------------------------------
-const DOME_OPACITY = 0.09;
-const domeMat = fresnelMaterial(hex(PALETTE.safe), { power: 3.0, opacity: DOME_OPACITY, scan: 1, radius: defR });
+// A faint shell with a crisper rim: the outline reads as the defended volume without
+// tinting everything behind it green
+const DOME_OPACITY = 0.065;
+const domeMat = fresnelMaterial(hex(PALETTE.safe), { power: 3.6, opacity: DOME_OPACITY, scan: 1, radius: defR });
 const dome = new THREE.Mesh(new THREE.SphereGeometry(defR, 96, 48, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
 scene.add(dome);
 
@@ -262,7 +266,7 @@ const dropI = dropLine(hex(PALETTE.kv));
 const gridLabels = [];
 // kind 'alt' labels the altitude scale (perspective views); 'map' labels the ground axes (top-down view only)
 function gridLabel(text, pos, kind) {
-  const outer = document.createElement('div'); outer.className = 'label3d gridlbl';
+  const outer = document.createElement('div'); outer.className = `label3d gridlbl ${kind}`;
   const inner = document.createElement('div'); inner.textContent = text; outer.appendChild(inner);
   const o = new CSS2DObject(outer); o.position.copy(pos); scene.add(o);
   o.userData.kind = kind;

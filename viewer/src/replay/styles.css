@@ -30,6 +30,13 @@
   --z-menu: 20;
   --z-dialog: 30;
   --z-loading: 40;
+
+  /* Layout: screen-edge gutter and the transport dock's measured height (set by ui.js),
+     so both side columns and the analysis drawer always stop just above the dock */
+  --edge: 18px;
+  --dock-h: 100px;
+  --above-dock: calc(var(--edge) + env(safe-area-inset-bottom, 0px) + var(--dock-h) + 12px);
+  --col-w: 296px;
 }
 
 * { box-sizing: border-box; }
@@ -80,7 +87,7 @@ h2 span { font-weight: 400; color: var(--faint); font-size: 11px; }
 /* ---------- Brand (top-left) ---------- */
 /* Left column: brand + telemetry, kept clear of the transport dock */
 #hud > #left {
-  position: absolute; left: 18px; top: 18px; bottom: 132px; width: 272px;
+  position: absolute; left: var(--edge); top: var(--edge); bottom: var(--above-dock); width: var(--col-w);
   display: flex; flex-direction: column; gap: 10px; pointer-events: none;
 }
 #left > * { pointer-events: auto; }
@@ -153,11 +160,18 @@ dd { margin: 0; font: 500 12.5px/1.2 var(--mono); font-variant-numeric: tabular-
 .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--kv), var(--accent) 70%, var(--threat)); transition: width 0.15s linear; }
 .bar.dv > i { width: 100%; background: linear-gradient(90deg, var(--safe), var(--kv)); }
 .bar.dv > i.low { background: var(--threat); }
+/* A vehicle or engagement with nothing to report collapses to its header and status,
+   instead of a block of dashes, and expands when the data starts */
+.inst.idle .big, .inst.idle dl, .inst.idle .bars { display: none; }
+.inst.idle > header { color: var(--muted); }
+.inst.idle::after { opacity: 0.4; }
+.inst:not(.idle) .big, .inst:not(.idle) dl { animation: enter 0.4s var(--ease); }
 
 /* ---------- Right column: seeker PiP, debrief, event log, profile ---------- */
+/* Mirrors the left column: same top, bottom, width and gap, so the frame stays balanced */
 #side {
-  position: absolute; right: 18px; top: 18px; bottom: 150px; width: 320px;
-  display: flex; flex-direction: column; gap: 10px; justify-content: flex-end; pointer-events: none;
+  position: absolute; right: var(--edge); top: var(--edge); bottom: var(--above-dock); width: var(--col-w);
+  display: flex; flex-direction: column; gap: 10px; justify-content: flex-start; pointer-events: none;
   transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
 }
 #side > * { pointer-events: auto; }
@@ -182,7 +196,7 @@ body.pip-off #pip-box, body.bda-on #pip-box { display: none; }
 #pip-reticle #pip-los-dot { fill: var(--threat); stroke: none; }
 .pip-hud {
   position: absolute; left: 8px; right: 8px; bottom: 6px; display: flex; justify-content: space-between;
-  font: 500 10px/1 var(--mono); color: var(--muted); pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  font: 500 10.5px/1 var(--mono); color: var(--muted); pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 #log { list-style: none; margin: 0; padding: 0 0 0 2px; position: relative; }
 #log::before { content: ''; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 1px; background: var(--hairline-2); }
@@ -203,6 +217,8 @@ body.pip-off #pip-box, body.bda-on #pip-box { display: none; }
 
 #profilebox { padding: 12px 14px 10px; }
 .prof-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+/* Title over its unit line, rather than wrapping mid-phrase next to the view switch */
+#prof-title { flex-direction: column; align-items: flex-start; gap: 3px; margin: 0; }
 .seg.mini { padding: 1.5px; gap: 1px; border-radius: 6px; }
 .seg.mini button { font-size: 10.5px; padding: 4px 6.5px; border-radius: 4px; }
 .prof-wrap { position: relative; }
@@ -259,8 +275,9 @@ kbd { font: 500 10px/1 var(--mono); color: var(--faint); border: 1px solid var(-
 
 /* ---------- Transport dock (bottom) ---------- */
 #transport {
-  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
-  width: min(1060px, calc(100vw - 36px)); padding: 10px 12px 10px; display: grid; gap: 8px;
+  position: absolute; left: 50%; bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  width: min(1060px, calc(100vw - 2 * var(--edge))); padding: 10px 12px 10px; display: grid; gap: 8px;
+  grid-template-columns: minmax(0, 1fr);  /* never grow past the screen when a row is too wide */
 }
 .row1, .row2 { display: flex; align-items: center; gap: 10px; }
 .row2 { gap: 8px; }
@@ -359,7 +376,7 @@ kbd { font: 500 10px/1 var(--mono); color: var(--faint); border: 1px solid var(-
 
 /* ---------- Analysis drawer ---------- */
 #analysis {
-  position: absolute; top: 132px; right: 18px; bottom: 150px; width: min(800px, calc(100vw - 330px));
+  position: absolute; top: 132px; right: var(--edge); bottom: var(--above-dock); width: min(800px, calc(100vw - var(--col-w) - 3 * var(--edge)));
   display: none; flex-direction: column; background: var(--surface-solid); overflow: hidden;
 }
 body.analysis #analysis { display: flex; animation: enter 0.25s var(--ease); }
@@ -432,11 +449,39 @@ body.sci #grain { display: none; }
 body.sci #vignette { opacity: 0.5; }
 .label3d.gridlbl > div {
   transform: translate(-50%, 6px); padding: 0; border: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none;
-  font: 500 10px/1 var(--mono); color: rgba(214, 228, 240, 0.5);
+  font: 500 11px/1 var(--mono); color: rgba(214, 228, 240, 0.68);
+  text-shadow: 0 1px 2px rgba(3, 5, 9, 0.9), 0 0 6px rgba(3, 5, 9, 0.7);
 }
+/* Altitude-scale labels read off to the right of the scale, never across it (or off-screen
+   when the scale sits at the edge of a narrow view) */
+.label3d.gridlbl.alt > div { transform: translate(6px, -50%); }
 
 @media (max-width: 1100px) { .figs, .stats { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 860px) { #analysis { left: 18px; width: auto; top: 90px; } }
+
+/* ---------- Sim Lab dialog ---------- */
+#sim-lab {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px)); padding: 20px 22px; z-index: var(--z-dialog);
+  background: var(--surface-solid);
+}
+#sim-lab header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+#sim-lab h2 { margin: 4px 0 0; font-size: 17px; }
+.lab-sub { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.lab-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; font-size: 11.5px; color: var(--faint); }
+.lab-presets button {
+  font: 500 11px/1 var(--mono); padding: 6px 8px; border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-2); background: rgba(214, 228, 240, 0.05); color: var(--text); cursor: pointer;
+}
+.lab-presets button:hover { border-color: rgba(242, 180, 92, 0.55); color: var(--accent); }
+.lab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-bottom: 16px; }
+.lab-grid label { display: grid; gap: 5px; font-size: 11.5px; color: var(--muted); }
+.lab-grid input, .lab-grid select {
+  font: 500 12.5px/1.2 var(--mono); color: var(--text); background: rgba(7, 10, 15, 0.75);
+  border: 1px solid var(--hairline-2); border-radius: var(--r-sm); padding: 7px 9px; outline: none;
+}
+.lab-grid input:focus, .lab-grid select:focus { border-color: var(--accent); }
+.lab-actions { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--hairline); padding-top: 14px; }
 
 /* ---------- Focus mode ---------- */
 body.focus #brand, body.focus #telemetry { opacity: 0; transform: translateX(-12px); pointer-events: none; }
@@ -469,13 +514,70 @@ button.on-toggle { color: var(--accent); border-color: rgba(242, 180, 92, 0.4); 
   #phases { display: none; }
 }
 @media (max-width: 860px) {
-  #telemetry, #scenario, #brand .eyebrow, #cam-wrap .seg-label, #speeds, #speed-label { display: none; }
+  #telemetry, #scenario, #brand .eyebrow, #cam-label, #speeds { display: none; }
   #hud > #left { width: 46vw; bottom: auto; }
   #brand { padding: 10px 12px; }
   #brand h1 { font-size: 16px; margin: 0 0 6px; }
-  #mission { left: auto; right: 18px; transform: none; padding: 10px 12px; }
+  #mission { left: auto; right: var(--edge); transform: none; padding: 10px 12px; }
   #clock { font-size: 19px; }
-  #side { width: calc(100vw - 36px); bottom: 150px; }
+  /* Only the debrief and seeker inset remain on the right; they sit just above the dock */
+  #side { width: min(var(--col-w), calc(100vw - 2 * var(--edge))); top: auto; justify-content: flex-end; }
+  #events, #profilebox { display: none; }
   #tlabel { min-width: 0; }
+}
+
+/* ---------- Phones (portrait) ---------- */
+/* One column: the clock is a full-width top bar, the title card sits under it, the scene
+   gets the middle of the screen, and the dock wraps its controls instead of overflowing */
+@media (max-width: 600px) {
+  :root { --edge: 12px; }
+  #mission {
+    top: calc(var(--edge) + env(safe-area-inset-top, 0px)); left: var(--edge); right: var(--edge);
+    transform: none; padding: 8px 12px; justify-items: stretch;
+  }
+  .clockrow { justify-content: space-between; }
+  #clock { font-size: 20px; }
+  #hud > #left {
+    top: calc(var(--edge) + env(safe-area-inset-top, 0px) + 54px); left: var(--edge); right: var(--edge);
+    width: auto; bottom: auto;
+  }
+  #brand { padding: 9px 12px 10px; }
+  #brand h1 { font-size: 15px; margin: 0 0 6px; }
+  #rule { font-size: 11.5px; }
+
+  /* The seeker inset would cover the middle of the scene; the debrief still shows at the end */
+  #side { left: var(--edge); right: var(--edge); width: auto; }
+  #pip-box { display: none; }
+  #bda { padding: 14px 14px 12px; }
+  #bda-title { font-size: 19px; }
+  #bda-rows { gap: 8px 12px; padding: 10px 0; }
+
+  #transport { padding: 8px; gap: 6px; }
+  .row1 { gap: 6px; }
+  #timeline-wrap { margin: 0 4px; }
+  #tlabel { font-size: 11px; }
+  .row2 { flex-wrap: wrap; gap: 6px; }
+  .row2 .spacer { display: none; }
+  #cam-btns { flex: 1 0 100%; }
+  #cam-btns button { flex: 1 1 0; padding-inline: 2px; }
+  .row2 > button, .row2 > .menu-wrap { flex: 1 1 auto; min-width: 0; }
+  .row2 button { white-space: nowrap; padding-inline: 6px; }
+  .row2 > .menu-wrap > button { width: 100%; }
+  /* The layers menu spans the dock instead of hanging off its button and leaving the screen */
+  .row2 > .menu-wrap { position: static; }
+  .menu { left: 0; right: 0; width: auto; }
+
+  #toast { top: auto; bottom: calc(var(--above-dock) + 4px); max-width: calc(100vw - 2 * var(--edge)); }
+  #analysis { left: var(--edge); right: var(--edge); width: auto; top: calc(var(--edge) + 54px); }
+  #help .grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- Touch screens ---------- */
+/* Bigger hit areas (≥ 40 px) on the dock, and no keyboard-shortcut button where there is no keyboard */
+@media (pointer: coarse) {
+  #transport button { min-height: 40px; }
+  #transport button.icon { width: 40px; height: 40px; }
+  #help-btn { display: none; }
+  #timeline::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -8px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

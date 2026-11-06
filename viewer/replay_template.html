@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>THAAD Engagement Replay</title>
 <meta name="description" content="Interactive 3D replay of a simulated terminal ballistic-missile intercept.">
 <meta name="color-scheme" content="dark">
@@ -62,7 +62,7 @@
       </div>
     </article>
     <article class="glass inst eng">
-      <header>Engagement</header>
+      <header>Engagement <span id="en-stage" class="stage"></span></header>
       <div class="big"><span id="en-ttg">—</span><small>time to go</small></div>
       <dl>
         <div><dt>Separation</dt><dd id="en-sep">—</dd></div>
@@ -172,6 +172,7 @@
           <button data-layer="slowmo" role="menuitemcheckbox">Slow motion at intercept <kbd>M</kbd></button>
         </div>
       </div>
+      <button id="lab-btn" title="In-Browser GNC Simulation Lab — run custom seeds &amp; GNC laws (S)" aria-pressed="false">Sim Lab</button>
       <button id="analysis-btn" title="Analysis figures and methods (A)" aria-pressed="false">Analysis</button>
       <button id="focus-btn" title="Hide panels (F)">Focus</button>
       <button id="help-btn" class="icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
@@ -221,9 +222,63 @@
     <div class="k"><span>Analysis figures</span><span><kbd>A</kbd></span></div>
     <div class="k"><span>Scientific / cinematic style</span><span><kbd>G</kbd></span></div>
     <div class="k"><span>GNC vectors &amp; PIP / Seeker PiP</span><span><kbd>X</kbd><kbd>P</kbd></span></div>
+    <div class="k"><span>Live GNC Sim Lab</span><span><kbd>S</kbd></span></div>
     <div class="k"><span>Layers</span><span><kbd>R</kbd><kbd>K</kbd><kbd>E</kbd><kbd>L</kbd><kbd>H</kbd><kbd>M</kbd></span></div>
   </div>
   <p>Drag anywhere in the scene to spin the camera and scroll to zoom; right-drag pans. Grabbing a chase camera keeps the orbit centered on that vehicle. Press <kbd>C</kbd>, <kbd>T</kbd>, <kbd>I</kbd> or <kbd>V</kbd> to hand the camera back.</p>
+</section>
+
+<section id="sim-lab" class="glass" role="dialog" aria-modal="true" aria-labelledby="lab-title" hidden>
+  <header>
+    <div>
+      <div class="eyebrow">Interactive GNC Workbench</div>
+      <h2 id="lab-title">Live In-Browser Simulation Lab</h2>
+    </div>
+    <button id="lab-close" class="ghost">Close <kbd>Esc</kbd></button>
+  </header>
+  <p class="lab-sub">Run a full 3-DOF RK4 engagement directly in your browser (~3 ms). Compare 6-state KF vs. 7-state drag-estimating EKF, Cartesian vs. Polar RAE radar, and PN / APN / ZEM guidance.</p>
+  <div class="lab-presets">
+    <span>Quick presets:</span>
+    <button type="button" data-preset="adv13">Seed 13 · EKF7 + APN Rescue</button>
+    <button type="button" data-preset="eng13">Seed 13 · KF6 + PN (Divert Miss)</button>
+    <button type="button" data-preset="eng913">Seed 913 · Engineering Hit</button>
+    <button type="button" data-preset="zem42">Seed 42 · EKF7 + Optimal ZEM</button>
+  </div>
+  <div class="lab-grid">
+    <label><span>Random Seed</span><input id="lab-seed" type="number" min="0" max="999999" value="13"></label>
+    <label><span>Tracking Filter</span>
+      <select id="lab-filter">
+        <option value="ekf7">7-State EKF (Estimates Drag k_T)</option>
+        <option value="kf6">6-State Linear KF (Ignores Drag)</option>
+      </select>
+    </label>
+    <label><span>Impact Predictor (PIP)</span>
+      <select id="lab-pip">
+        <option value="drag">RK4 Drag-Integrated PIP</option>
+        <option value="vacuum">Closed-Form Vacuum PIP</option>
+      </select>
+    </label>
+    <label><span>Radar Sensor Model</span>
+      <select id="lab-sensor">
+        <option value="rae">Polar RAE + Doppler (3D Ellipsoid)</option>
+        <option value="cartesian">Isotropic Cartesian (Sphere)</option>
+      </select>
+    </label>
+    <label><span>Guidance Law</span>
+      <select id="lab-law">
+        <option value="apn">Augmented PN (Target Drag Feed-Forward)</option>
+        <option value="zem">Optimal Zero-Effort Miss (ZEM)</option>
+        <option value="pn">Classical PN (+1g Bias)</option>
+      </select>
+    </label>
+    <label><span>KV Divert Budget (m/s)</span><input id="lab-dv" type="number" min="50" max="2000" step="25" value="435"></label>
+    <label><span>Navigation Gain (N)</span><input id="lab-pn" type="number" min="2" max="8" step="0.5" value="4.0"></label>
+    <label><span>Actuator Lag τ (s)</span><input id="lab-tau" type="number" min="0" max="0.5" step="0.01" value="0.00"></label>
+  </div>
+  <div class="lab-actions">
+    <button type="button" id="lab-reset" class="ghost">Reset to Recorded File</button>
+    <button type="button" id="lab-run" class="primary">Simulate &amp; Replay →</button>
+  </div>
 </section>
 
 <div id="loading"><div class="card"><strong>Engagement replay</strong><div class="line"></div><span>Loading scene</span></div></div>

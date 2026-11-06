@@ -75,7 +75,7 @@ export function drawProfile(time, tp, ip) {
   const c = pctx;
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, w, h);
-  c.font = '500 10px "Geist Mono", monospace';
+  c.font = '500 11px "Geist Mono", monospace';
   const mode = state.profileMode || 'elev';
   const [fi] = locate(time);
   const dot = (x, y, col, r = 3.2) => { c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); };

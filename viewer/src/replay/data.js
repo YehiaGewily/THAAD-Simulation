@@ -2,13 +2,24 @@
 // scene units, plus interpolation helpers and the key event times.
 import * as THREE from 'three';
 
-export const D = JSON.parse(document.getElementById('replay-data').textContent);
+export const isCustomSim = typeof window !== 'undefined'
+  && window.location.hash.includes('custom')
+  && typeof sessionStorage !== 'undefined'
+  && !!sessionStorage.getItem('thaad_custom_replay');
+
+export const D = isCustomSim
+  ? JSON.parse(sessionStorage.getItem('thaad_custom_replay'))
+  : JSON.parse(document.getElementById('replay-data').textContent);
 export const KM = 0.001;
 export const G_KM = 9.81 * KM;
 export const N = D.t.length;
 export const T = Float64Array.from(D.t);
 
-export const MODE_NAMES = { 'ENGINEERING MODE': 'Engineering', 'MAX-PERFORMANCE MODE': 'Max performance' };
+export const MODE_NAMES = {
+  'ENGINEERING MODE': 'Engineering',
+  'MAX-PERFORMANCE MODE': 'Max performance',
+  'ADVANCED GNC MODE': 'Advanced GNC',
+};
 export const RULE_NAMES = { 'PIP-GATED LAUNCH': 'PIP-gated launch', 'FIRE ON TRACK': 'Fires on track' };
 
 // Sim frame is x = East, y = North, z = Up (metres). Three.js is y-up, so we
@@ -181,7 +192,9 @@ export const GNC = (() => {
   const pipValid = new Uint8Array(N);
   const pipSigE = new Float32Array(N);           // 3-sigma ground footprint semi-axis East (km)
   const pipSigN = new Float32Array(N);           // 3-sigma ground footprint semi-axis North (km)
-  const pipBias = new Float32Array(N).fill(NaN); // |PIP(t) - trueImpact| in metres
+  const pipBias = new Float32Array(N).fill(NaN); // |PIP(t) - trueImpact| in metres (active predictor)
+  const pipVacBias = new Float32Array(N).fill(NaN); // Vacuum PIP bias reference (m)
+  const estDrag = new Float32Array(N).fill(NaN); // EKF estimated drag * 1e5 (1/km)
   const dvUsed = new Float32Array(N);            // cumulative KV divert delta-v used (m/s)
   const mass = new Float32Array(N);              // interceptor mass (kg)
   const acScene = new Float32Array(3 * N);       // 3D commanded acceleration in scene frame (m/s^2)
@@ -195,6 +208,32 @@ export const GNC = (() => {
 
   const hasPayloadNees = Array.isArray(D.nees) && D.nees.length === N;
   const hasPayloadNis = Array.isArray(D.nis) && D.nis.length === N;
+  const hasEstDrag = Array.isArray(D.estDrag) && D.estDrag.length === N;
+  const useDragPip = D.pipMode === 'drag';
+
+  function integratePipDrag(x0, y0, z0, vx0, vy0, vz0, kd) {
+    if (vz0 >= 0 || z0 <= 0 || kd <= 1e-11) return null;
+    let st = [x0, y0, z0, vx0, vy0, vz0];
+    const h = 0.5;
+    const deriv = (s) => {
+      const sp = Math.hypot(s[3], s[4], s[5]);
+      return [s[3], s[4], s[5], -kd * sp * s[3], -kd * sp * s[4], -kd * sp * s[5] - simG];
+    };
+    for (let step = 0; step < 500; step++) {
+      const prev = st.slice();
+      const k1 = deriv(st);
+      const k2 = deriv(st.map((v, j) => v + 0.5 * h * k1[j]));
+      const k3 = deriv(st.map((v, j) => v + 0.5 * h * k2[j]));
+      const k4 = deriv(st.map((v, j) => v + h * k3[j]));
+      st = st.map((v, j) => v + (h / 6) * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]));
+      if (st[2] <= 0) {
+        const f = prev[2] / Math.max(prev[2] - st[2], 1e-9);
+        return [prev[0] + f * (st[0] - prev[0]), prev[1] + f * (st[1] - prev[1])];
+      }
+      if (st[5] >= 0) return null;
+    }
+    return null;
+  }
 
   let dv = 0;
   for (let i = 0; i < N; i++) {
@@ -205,6 +244,8 @@ export const GNC = (() => {
     const evx = D.kfErr[k + 3], evy = D.kfErr[k + 4], evz = D.kfErr[k + 5];
     const sx = D.kfSig[k], sy = D.kfSig[k + 1], sz = D.kfSig[k + 2];
     const svx = D.kfSig[k + 3], svy = D.kfSig[k + 4], svz = D.kfSig[k + 5];
+
+    if (hasEstDrag && Number.isFinite(D.estDrag[i])) estDrag[i] = D.estDrag[i];
 
     // Filter state estimate in sim frame
     const epx = tx + ex, epy = ty + ey, epz = tz + ez;
@@ -218,14 +259,20 @@ export const GNC = (() => {
     }
     if (hasPayloadNis && D.nis[i] != null && Number.isFinite(D.nis[i])) nis[i] = D.nis[i];
 
-    // Instantaneous vacuum PIP from Kalman estimate
+    // Instantaneous PIP from Kalman estimate (vacuum and optional drag-integrated)
     if (epvz < 0 && epz > 0) {
       const disc = epvz * epvz + 2 * simG * epz;
       const root = Math.sqrt(Math.max(0, disc));
       const tImp = (epvz + root) / simG;
       if (tImp > 0) {
-        const px = epx + epvx * tImp;
-        const py = epy + epvy * tImp;
+        let px = epx + epvx * tImp;
+        let py = epy + epvy * tImp;
+        pipVacBias[i] = Math.hypot(px - trueImpactSim[0], py - trueImpactSim[1]);
+        if (useDragPip) {
+          const kd = hasEstDrag ? Math.max(0, D.estDrag[i] * 1e-5) : threatDrag;
+          const dPip = integratePipDrag(epx, epy, epz, epvx, epvy, epvz, kd);
+          if (dPip) { px = dPip[0]; py = dPip[1]; }
+        }
         pipTrack[a] = px * KM;
         pipTrack[a + 1] = 0.025;
         pipTrack[a + 2] = -py * KM;
@@ -305,7 +352,7 @@ export const GNC = (() => {
       }
     }
   }
-  return { pipTrack, pipValid, pipSigE, pipSigN, pipBias, dvUsed, mass, acScene, zemScene, zemTrue, zemEst, losTrue, losEst, nees, nis };
+  return { pipTrack, pipValid, pipSigE, pipSigN, pipBias, pipVacBias, estDrag, dvUsed, mass, acScene, zemScene, zemTrue, zemEst, losTrue, losEst, nees, nis };
 })();
 
 /** Compute a 3D ballistic trajectory arc (scene coords) from frame fi to ground (z = 0). */

@@ -5,11 +5,12 @@
 import * as THREE from 'three';
 import {
   D, GNC, MODE_NAMES, N, RULE_NAMES, T, burnT, cpaInfo, cpaT, defR, divertBudget, endEventT, impactPos,
-  impactT, killT, launchT, missCpaT, pipPos, tEnd, terminalT, threatStart, tStart,
+  impactT, isCustomSim, killT, launchT, missCpaT, pipPos, tEnd, terminalT, threatStart, tStart,
 } from './data.js';
 import { $, COL, fmtKm, fmtSpd, toast } from './dom.js';
 import { seg } from './charts.js';
 import { buildAnalysis, exportCsv } from './analysis.js';
+import { runBrowserSim } from './sim_engine.js';
 import { SPEEDS, camLookTarget, hashArgs, seek, state } from './state.js';
 import { bloom, camera, clouds, composer, controls, labelRenderer, renderer, terrainMat } from './scene.js';
 import { trailMinDefaults, trailUniforms, tubeMeshes } from './effects.js';
@@ -309,6 +310,72 @@ function setHelp(open) { help.hidden = !open; if (open) $('help-close').focus();
 $('help-btn').onclick = () => setHelp(help.hidden);
 $('help-close').onclick = () => setHelp(false);
 
+const lab = $('sim-lab'), labBtn = $('lab-btn');
+export function setLab(open) {
+  if (!lab) return;
+  lab.hidden = !open;
+  if (labBtn) {
+    labBtn.classList.toggle('on-toggle', open);
+    labBtn.setAttribute('aria-pressed', open);
+  }
+  if (open) $('lab-seed')?.focus();
+}
+if (lab && labBtn) {
+  if (D.seed != null && $('lab-seed')) $('lab-seed').value = D.seed;
+  if (D.filterType && $('lab-filter')) $('lab-filter').value = D.filterType;
+  if (D.pipMode && $('lab-pip')) $('lab-pip').value = D.pipMode;
+  if (D.sensorModel && $('lab-sensor')) $('lab-sensor').value = D.sensorModel;
+  if (D.guidanceLaw && $('lab-law')) $('lab-law').value = D.guidanceLaw;
+
+  labBtn.onclick = () => setLab(lab.hidden);
+  $('lab-close').onclick = () => setLab(false);
+
+  const PRESETS = {
+    adv13:  { seed: 13,  filter: 'ekf7', pip: 'drag',   sensor: 'rae',       law: 'apn', dv: 435, pn: 4.0, tau: 0.00 },
+    eng13:  { seed: 13,  filter: 'kf6',  pip: 'vacuum', sensor: 'cartesian', law: 'pn',  dv: 435, pn: 4.0, tau: 0.00 },
+    eng913: { seed: 913, filter: 'kf6',  pip: 'vacuum', sensor: 'cartesian', law: 'pn',  dv: 435, pn: 4.0, tau: 0.00 },
+    zem42:  { seed: 42,  filter: 'ekf7', pip: 'drag',   sensor: 'rae',       law: 'zem', dv: 435, pn: 4.0, tau: 0.02 },
+  };
+  lab.querySelectorAll('[data-preset]').forEach((b) => {
+    b.onclick = () => {
+      const p = PRESETS[b.dataset.preset];
+      if (!p) return;
+      $('lab-seed').value = p.seed;
+      $('lab-filter').value = p.filter;
+      $('lab-pip').value = p.pip;
+      $('lab-sensor').value = p.sensor;
+      $('lab-law').value = p.law;
+      $('lab-dv').value = p.dv;
+      $('lab-pn').value = p.pn;
+      $('lab-tau').value = p.tau;
+    };
+  });
+
+  $('lab-run').onclick = () => {
+    const payload = runBrowserSim({
+      seed: +$('lab-seed').value,
+      filterType: $('lab-filter').value,
+      pipMode: $('lab-pip').value,
+      sensorModel: $('lab-sensor').value,
+      guidanceLaw: $('lab-law').value,
+      divertBudget: +$('lab-dv').value,
+      pnGain: +$('lab-pn').value,
+      tau: +$('lab-tau').value,
+    });
+    sessionStorage.setItem('thaad_custom_replay', JSON.stringify(payload));
+    if (window.location.hash.includes('custom')) window.location.reload();
+    else window.location.hash = 'custom';
+    window.location.reload();
+  };
+
+  $('lab-reset').onclick = () => {
+    sessionStorage.removeItem('thaad_custom_replay');
+    window.location.hash = '';
+    window.location.reload();
+  };
+  if (!isCustomSim) $('lab-reset').hidden = true;
+}
+
 renderer.domElement.addEventListener('wheel', (e) => {
   if (state.camMode === 'threat' || state.camMode === 'kv') {
     state.chaseDist = THREE.MathUtils.clamp(state.chaseDist * Math.exp(e.deltaY * 0.0015), 0.08, 40);
@@ -319,11 +386,13 @@ renderer.domElement.addEventListener('wheel', (e) => {
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toLowerCase();
-  if (k === 'escape') { setHelp(false); setMenu(false); return; }
-  // Let a focused button handle its own activation keys
+  if (k === 'escape') { setHelp(false); setLab(false); setMenu(false); return; }
+  // Let a focused button or form field handle its own activation keys
   if (e.target.tagName === 'BUTTON' && (k === ' ' || k === 'enter')) return;
+  if ((e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') && e.target.id !== 'timeline') return;
   if (e.target.tagName === 'INPUT' && k !== ' ') return;
   if (k === '?') setHelp(help.hidden);
+  else if (k === 's') setLab(lab ? lab.hidden : false);
   else if (k === ' ') { setPlaying(!state.playing); e.preventDefault(); }
   else if (k === 'arrowright') seek(state.simTime + (e.shiftKey ? 5 : 1));
   else if (k === 'arrowleft') seek(state.simTime - (e.shiftKey ? 5 : 1));
@@ -445,10 +514,13 @@ export function updateHud(h) {
     $('th-sig').textContent = threatAlive ? `±${Math.hypot(D.kfSig[k6], D.kfSig[k6 + 1], D.kfSig[k6 + 2]).toFixed(1)} m` : '—';
     $('th-err').textContent = threatAlive ? `${Math.hypot(D.kfErr[k6], D.kfErr[k6 + 1], D.kfErr[k6 + 2]).toFixed(1)} m` : '—';
     const pb = GNC.pipBias[fi];
-    $('th-pip').textContent = threatAlive && isFinite(pb) ? (pb >= 1000 ? `${(pb / 1000).toFixed(2)} km` : `${Math.round(pb)} m`) : '—';
+    $('th-pip').textContent = threatAlive ? (isFinite(pb) ? (pb >= 1000 ? `${(pb / 1000).toFixed(2)} km` : `${Math.round(pb)} m`) : '—')
+      : killed ? 'Destroyed' : 'Impacted';
   }
+  $('telemetry').querySelector('.inst.threat').classList.toggle('idle', !threatAlive);
   const dvUsed = GNC.dvUsed[fi] || 0;
   const dvExhausted = divertBudget != null && dvUsed >= divertBudget - 0.5;
+  $('telemetry').querySelector('.inst.kv').classList.toggle('idle', !(launched && kvAlive));
   $('kv-stage').textContent = !launched ? 'On launcher' : killed ? 'Hit target' : impacted || missed ? 'Missed' : stage === 1 ? 'Boost' : dvExhausted ? 'Coasting (Δv 0)' : 'Coasting (KV)';
   $('kv-alt').textContent = launched && kvAlive ? fmtKm(ip.y) : '—';
   $('kv-spd').textContent = launched && kvAlive ? fmtSpd(iv.length()) : '—';
@@ -473,6 +545,8 @@ export function updateHud(h) {
   }
 
   const activeGuid = launched && !killed && !impacted;
+  $('telemetry').querySelector('.inst.eng').classList.toggle('idle', !activeGuid);
+  $('en-stage').textContent = !launched ? 'Awaiting launch' : activeGuid ? '' : killed ? 'Complete' : 'Ended';
   $('en-sep').textContent = activeGuid ? fmtKm(sep) : '—';
   // Negative closing speed means the range is opening
   $('en-cls').textContent = activeGuid ? fmtSpd(closing) : '—';
@@ -516,6 +590,7 @@ export function updateHud(h) {
   if (count !== lastEventCount) {
     events.forEach((e, i) => e.el.classList.toggle('latest', i === count - 1 && lastEventCount >= 0 && count > lastEventCount));
     lastEventCount = count;
+    pinLog();
   }
 
   if (!state.scrubbing) tl.value = time;
@@ -529,5 +604,21 @@ export function updateHud(h) {
     const el = $('bda');
     if (showBda) { el.classList.add('mounted'); requestAnimationFrame(() => el.classList.add('show')); }
     else el.classList.remove('show', 'mounted');
+    pinLog();  // the debrief takes room from the log
   }
+}
+
+// Keep the newest event in view when the log is taller than its panel; runs after layout,
+// since a new event or the debrief appearing changes the panel's height
+function pinLog() {
+  requestAnimationFrame(() => { const box = $('events'); box.scrollTop = box.scrollHeight; });
+}
+
+// The side columns and the analysis drawer stop just above the transport dock. The
+// dock's height changes when it wraps onto more rows (phones), so measure it.
+{
+  const dock = $('transport');
+  const setDockH = () => document.documentElement.style.setProperty('--dock-h', `${Math.ceil(dock.getBoundingClientRect().height)}px`);
+  if ('ResizeObserver' in window) new ResizeObserver(setDockH).observe(dock);
+  setDockH();
 }

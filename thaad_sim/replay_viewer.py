@@ -81,6 +81,11 @@ def build_payload(hist):
         'kfCov': _flat_fine(hist['kf_cov']),   # position covariance xx, yy, zz, xy, xz, yz, m^2
         'nees': [round(float(v), 2) for v in meta.get('nees', [])],
         'nis': [None if v is None else round(float(v), 2) for v in meta.get('nis', [])],
+        'estDrag': [round(float(v) * 1e5, 3) for v in meta.get('est_drag', [])] if meta.get('filter_type') == 'ekf7' else None,
+        'filterType': meta.get('filter_type', 'kf6'),
+        'pipMode': meta.get('pip_mode', 'vacuum'),
+        'sensorModel': meta.get('sensor_model', 'cartesian'),
+        'guidanceLaw': meta.get('guidance_law', 'pn'),
         'status': status,
         'stage': [STAGE_CODES[s] for s in hist['stage']],
         'g': g,
