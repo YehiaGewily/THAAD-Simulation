@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from .estimation import KalmanFilter, cwna_process_noise
+from .estimation import KalmanFilter, cwna_process_noise, make_filter, measure_radar
 from .scenario import spawn_threat
 
 STATE_DIM = 6   # [p, v]
@@ -72,7 +72,7 @@ def track_run(cfg, rng, truth_q=None, max_time=None):
     """
     dt, g = cfg.sim.dt, cfg.sim.g
     threat = spawn_threat(cfg, rng).threat
-    kf = KalmanFilter(dt, cfg.sensor.pos_noise, cfg.sensor.vel_noise, cfg.kalman.q, g)
+    kf = make_filter(cfg)
     if truth_q:
         L = np.linalg.cholesky(cwna_process_noise(truth_q, dt))
 
@@ -80,9 +80,8 @@ def track_run(cfg, rng, truth_q=None, max_time=None):
     rows = []
     impact, impact_time = np.full(2, np.nan), np.nan
     while threat.active and (max_time is None or t < max_time):
-        mp = threat.pos + rng.normal(0, cfg.sensor.pos_noise, 3)
-        mv = threat.vel + rng.normal(0, cfg.sensor.vel_noise, 3)
-        kf.update(mp, mv)
+        mp, mv, R_meas = measure_radar(threat.pos, threat.vel, cfg.sensor, rng)
+        kf.update(mp, mv, R_meas=R_meas)
         pip = kf.predict_impact(g)
         tgo = kf.time_to_impact(g)
         rows.append((t, kf.nees(threat.state), np.nan if kf.nis is None else kf.nis,

@@ -6,7 +6,7 @@ the interceptor, so the interceptor's mass is integrated with its motion.
 """
 import numpy as np
 
-from .guidance import G0, limit_divert, limit_g, pn_command
+from .guidance import G0, guidance_command, limit_divert, limit_g, pn_command
 from .integrators import integrate
 
 LAUNCH_SPEED = 80.0          # m/s tube-exit kick along the launch direction
@@ -68,6 +68,7 @@ class Interceptor:
         self.exploded = False
         self.divert_dv_used = 0.0
         self.g_hist = []
+        self.act_acc = np.zeros(3)
 
     @property
     def pos(self):
@@ -98,7 +99,7 @@ class Interceptor:
             return np.concatenate((vel, acc, [-mass_flow]))
         return deriv
 
-    def update(self, t, target_p, target_v, dt):
+    def update(self, t, target_p, target_v, dt, target_a=None):
         if not self.launched or self.exploded:
             return
         s = self.spec
@@ -113,8 +114,24 @@ class Interceptor:
         self.stage = "BOOST" if burn_left > dt else "KV_COAST"
 
         # Guidance runs once per step; its command is held over the step
-        acc_cmd = pn_command(target_p - self.pos, target_v - self.vel, s.pn_gain, self.g)
+        law = getattr(s, "guidance_law", "pn")
+        if law == "pn":
+            acc_cmd = pn_command(target_p - self.pos, target_v - self.vel, s.pn_gain, self.g)
+        else:
+            acc_cmd = guidance_command(law, target_p - self.pos, target_v - self.vel,
+                                       s.pn_gain, self.g, target_accel=target_a,
+                                       boost=(t_boost > 0))
         acc_cmd, acc_mag = limit_g(acc_cmd, s.max_g)
+
+        # Optional 1st-order autopilot / DACS actuator lag (tau > 0)
+        tau = float(getattr(s, "tau", 0.0) or 0.0)
+        if tau > 0.0:
+            alpha = 1.0 - np.exp(-dt / tau)
+            self.act_acc = self.act_acc + alpha * (acc_cmd - self.act_acc)
+            acc_cmd, acc_mag = limit_g(self.act_acc, s.max_g)
+        else:
+            self.act_acc = acc_cmd
+
         g_load = acc_mag
 
         state = self.state

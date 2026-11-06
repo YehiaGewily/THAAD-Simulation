@@ -4,7 +4,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .dynamics import Interceptor
-from .estimation import KalmanFilter
+from .estimation import KalmanFilter, make_filter, measure_radar
 from .scenario import spawn_threat
 
 HIST_KEYS = ('t', 't_pos', 'i_pos', 'k_pos', 'status', 'stage', 'raw',
@@ -64,7 +64,7 @@ def run(cfg, rng, console=None):
         f"aim {sc.aim_radius/1000:.1f} km from origin, T_imp~{sc.impact_time:.1f} s[/dim]"
     )
     interceptor = Interceptor([0, 0, 0], cfg.interceptor, g, cfg.sim.integrator)
-    kf = KalmanFilter(dt, cfg.sensor.pos_noise, cfg.sensor.vel_noise, cfg.kalman.q, g)
+    kf = make_filter(cfg)
 
     t_max = max(cfg.sim.t_max, sc.impact_time * 2.0 + 30.0)
 
@@ -77,6 +77,7 @@ def run(cfg, rng, console=None):
     min_sep = None   # closest approach over all steps since launch, from the CPA check
     nees_hist = []
     nis_hist = []
+    est_drag_hist = []
 
     console.print("\n" + "="*60, style="bold blue")
     console.print(f"[bold green]{cfg.title}[/bold green]")
@@ -84,16 +85,16 @@ def run(cfg, rng, console=None):
     console.print("="*60, style="bold blue")
 
     while t < t_max:
-        # Sensor model
-        mp = threat.pos + rng.normal(0, cfg.sensor.pos_noise, 3)
-        mv = threat.vel + rng.normal(0, cfg.sensor.vel_noise, 3)
-        ep, ev = kf.update(mp, mv)
+        # Sensor model (Cartesian or Polar Range-Azimuth-Elevation)
+        mp, mv, R_meas = measure_radar(threat.pos, threat.vel, cfg.sensor, rng)
+        ep, ev = kf.update(mp, mv, R_meas=R_meas)
         # Filter error vs truth and its 1-sigma bounds, for the analysis view
         kf_err = np.hstack((ep - threat.pos, ev - threat.vel))
         kf_sig = np.sqrt(np.diag(kf.P))
         kf_cov = kf.P[POS_COV_INDEX]
         nees_hist.append(float(kf_err @ np.linalg.solve(kf.P, kf_err)))
         nis_hist.append(kf.nis)
+        est_drag_hist.append(kf.est_drag)
 
         # Launch once the track is mature and the threat is descending. The
         # PIP-gated rule also requires the predicted impact point to fall
@@ -123,7 +124,7 @@ def run(cfg, rng, console=None):
         t_next = t + dt
         i_p0 = interceptor.pos.copy()
         t_p0 = threat.pos.copy()
-        interceptor.update(t, ep, ev, dt)
+        interceptor.update(t, ep, ev, dt, target_a=kf.est_target_accel)
         t_ground = threat.update(dt)
         # A ground impact ends the step early: the threat stops at z = 0 after t_ground
         window = dt if t_ground is None else t_ground
@@ -238,6 +239,11 @@ def run(cfg, rng, console=None):
         'g_hist':          interceptor.g_hist,
         'nees':            nees_hist,
         'nis':             nis_hist,
+        'est_drag':        est_drag_hist,
+        'filter_type':     cfg.kalman.filter_type,
+        'pip_mode':        cfg.kalman.pip_mode,
+        'sensor_model':    cfg.sensor.model,
+        'guidance_law':    cfg.interceptor.guidance_law,
         'defended_radius': eng.defended_radius,
         'kill_radius':     eng.kill_radius,
         'max_g':           cfg.interceptor.max_g,

@@ -1,7 +1,7 @@
 """Simulation configuration, loaded from a YAML file (see configs/)."""
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -10,6 +10,10 @@ import yaml
 from .integrators import INTEGRATORS
 
 LAUNCH_RULES = ("pip_gated", "fire_on_track")
+SENSOR_MODELS = ("cartesian", "rae")
+FILTER_TYPES = ("kf6", "ekf7")
+PIP_MODES = ("vacuum", "drag")
+GUIDANCE_LAWS = ("pn", "apn", "zem")
 
 # Engagement-rule labels shown in the terminal and the replay viewer
 ENGAGE_RULE_LABELS = {"pip_gated": "PIP-GATED LAUNCH", "fire_on_track": "FIRE ON TRACK"}
@@ -29,13 +33,22 @@ class SimSettings:
 
 @dataclass(frozen=True)
 class SensorSettings:
-    pos_noise: float   # m, 1-sigma per axis
-    vel_noise: float   # m/s, 1-sigma per axis
+    pos_noise: float                   # m, 1-sigma per axis (cartesian mode)
+    vel_noise: float                   # m/s, 1-sigma per axis (or cross-range vel in rae mode)
+    model: str = "cartesian"           # "cartesian" or "rae" (range-azimuth-elevation)
+    range_noise: float = 10.0          # m, 1-sigma radial range noise (rae mode)
+    angle_noise: float = 0.0015        # rad, 1-sigma azimuth/elevation noise (rae mode)
+    range_rate_noise: float = 4.0      # m/s, 1-sigma Doppler radial velocity noise (rae mode)
 
 
 @dataclass(frozen=True)
 class KalmanSettings:
-    q: float           # m^2/s^3, white-noise acceleration spectral density per axis
+    q: float                           # m^2/s^3, white-noise acceleration spectral density per axis
+    filter_type: str = "kf6"           # "kf6" (linear 6-state) or "ekf7" (7-state drag-estimating EKF)
+    pip_mode: str = "vacuum"           # "vacuum" (closed-form) or "drag" (RK4 drag-integrated PIP)
+    drag_init: float = 0.00003         # 1/m, initial drag coefficient estimate for ekf7
+    drag_std: float = 0.00003          # 1/m, initial 1-sigma uncertainty on drag for ekf7
+    q_drag: float = 1e-12              # 1/(m^2 s), process noise spectral density on drag for ekf7
 
 
 @dataclass(frozen=True)
@@ -55,6 +68,8 @@ class InterceptorSettings:
     pn_gain: float
     max_g: float                   # lateral acceleration limit, g
     kv_divert_dv: Optional[float]  # m/s divert budget; None = unlimited
+    guidance_law: str = "pn"       # "pn", "apn" (target drag feed-forward), or "zem" (optimal ZEM)
+    tau: float = 0.0               # s, 1st-order autopilot/DACS time constant (0 = instantaneous)
 
     @property
     def mass_flow(self):
@@ -100,9 +115,23 @@ class SimConfig:
         if self.sim.integrator not in INTEGRATORS:
             raise ValueError(f"sim.integrator must be one of {INTEGRATORS}, "
                              f"got {self.sim.integrator!r}")
+        if self.sensor.model not in SENSOR_MODELS:
+            raise ValueError(f"sensor.model must be one of {SENSOR_MODELS}, "
+                             f"got {self.sensor.model!r}")
+        if self.kalman.filter_type not in FILTER_TYPES:
+            raise ValueError(f"kalman.filter_type must be one of {FILTER_TYPES}, "
+                             f"got {self.kalman.filter_type!r}")
+        if self.kalman.pip_mode not in PIP_MODES:
+            raise ValueError(f"kalman.pip_mode must be one of {PIP_MODES}, "
+                             f"got {self.kalman.pip_mode!r}")
         i = self.interceptor
         if i.isp <= 0 or i.boost_thrust <= 0 or i.mass_wet <= i.mass_dry:
             raise ValueError("interceptor needs isp > 0, boost_thrust > 0 and mass_wet > mass_dry")
+        if i.guidance_law not in GUIDANCE_LAWS:
+            raise ValueError(f"interceptor.guidance_law must be one of {GUIDANCE_LAWS}, "
+                             f"got {i.guidance_law!r}")
+        if i.tau < 0:
+            raise ValueError(f"interceptor.tau must be >= 0, got {i.tau!r}")
         if self.engagement.launch_rule not in LAUNCH_RULES:
             raise ValueError(f"engagement.launch_rule must be one of {LAUNCH_RULES}, "
                              f"got {self.engagement.launch_rule!r}")
@@ -121,10 +150,14 @@ class SimConfig:
         p = {
             'dt': self.sim.dt, 't_max': self.sim.t_max, 'g': self.sim.g,
             'pos_noise': self.sensor.pos_noise, 'vel_noise': self.sensor.vel_noise,
+            'range_noise': self.sensor.range_noise if self.sensor.model == "rae" else None,
+            'angle_noise': self.sensor.angle_noise if self.sensor.model == "rae" else None,
+            'range_rate_noise': self.sensor.range_rate_noise if self.sensor.model == "rae" else None,
             'boost_thrust': i.boost_thrust, 'isp': i.isp,
             'mass_flow': i.mass_flow, 'burn_time': i.burn_time,
             'mass_wet': i.mass_wet, 'mass_dry': i.mass_dry, 'kv_mass': i.kv_mass,
             'kv_drag': i.kv_drag, 'pn_gain': i.pn_gain, 'max_g': i.max_g,
+            'tau': i.tau if i.tau > 0 else None,
             'kill_radius': e.kill_radius, 'kv_divert_dv': i.kv_divert_dv,
             'booster_drag': i.booster_drag, 'threat_drag': self.threat.drag,
             'kf_q': self.kalman.q,
@@ -161,8 +194,9 @@ def _section(cls, name, data):
     if not isinstance(data, dict):
         raise ValueError(f"config section '{name}' must be a mapping")
     known = {f.name for f in fields(cls)}
+    required = {f.name for f in fields(cls) if f.default is MISSING and f.default_factory is MISSING}
     unknown = set(data) - known
-    missing = known - set(data)
+    missing = required - set(data)
     if unknown:
         raise ValueError(f"unknown key(s) in '{name}': {', '.join(sorted(unknown))}")
     if missing:
