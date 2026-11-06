@@ -47,6 +47,9 @@ jobs:
         run: |
           mkdir -p site
           python -m thaad_sim --config configs/engineering.yaml --seed 913 --no-browser --out site/replay.html
+          python -m thaad_sim --config configs/engineering.yaml --seed 13 --no-browser --out site/replay_miss.html
+          python -m thaad_sim --config configs/advanced.yaml --seed 13 --no-browser --out site/replay_advanced.html
+          python -m thaad_sim --config configs/demo.yaml --seed 42 --no-browser --out site/replay_demo.html
           python -m thaad_sim.dashboard results/engineering.csv --out site/dashboard.html
           cp docs/site/index.html site/index.html
 

@@ -61,22 +61,48 @@ $$
 
 At burnout the booster separates: the mass state jumps to the kill vehicle's $m_{KV}$ = 200 kg, thrust stops, and the drag coefficient changes from the booster's to the kill vehicle's. The kill vehicle steers with divert thrusters whose total use is capped by a $\Delta v$ budget (435 m/s; unlimited in the demo). Divert propellant is not modeled, so $m_{KV}$ stays constant.
 
-## 4. Guidance
+## 4. Guidance and control
 
-Proportional navigation with a gravity bias, on the relative state from the Kalman estimate of the threat ($\mathbf r = \hat{\mathbf r}_T - \mathbf r_I$, $\mathbf v = \hat{\mathbf v}_T - \mathbf v_I$), with navigation constant $N = 4$:
+Three selectable guidance laws (`interceptor.guidance_law`: `pn`, `apn`, or `zem`) operate on the relative state from the tracking filter ($\mathbf r = \hat{\mathbf r}_T - \mathbf r_I$, $\mathbf v = \hat{\mathbf v}_T - \mathbf v_I$), with navigation constant $N = 4$:
+
+1. **Classical Proportional Navigation (`pn`)**:
+   $$
+   \boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad
+   \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z}
+   $$
+2. **Augmented Proportional Navigation (`apn`)**: feeds the 7-state EKF's estimated target aerodynamic drag deceleration $\hat{\mathbf a}_T = -\hat k_T\lVert\hat{\mathbf v}_T\rVert\hat{\mathbf v}_T$ (projected perpendicular to the line of sight $\hat{\mathbf r}$) into the guidance command, and applies $+g\hat{\mathbf z}$ only during boost since gravity cancels identically in the free-falling relative frame ($\ddot{\mathbf r}_{rel} = \mathbf a_{T,drag} - \mathbf a_{I,drag} - \mathbf a_{divert}$):
+   $$
+   \hat{\mathbf a}_{T,\perp} = \hat{\mathbf a}_T - (\hat{\mathbf a}_T\cdot\hat{\mathbf r})\hat{\mathbf r},\qquad
+   \mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + \tfrac{N}{2}\hat{\mathbf a}_{T,\perp} + \mathbb I_{\text{boost}}\,g\,\hat{\mathbf z}
+   $$
+3. **Optimal Zero-Effort Miss (`zem`)**:
+   $$
+   t_{go} = -\frac{\mathbf r\cdot\mathbf v}{\lVert\mathbf v\rVert^2},\qquad
+   \mathbf{ZEM} = \mathbf r + \mathbf v\,t_{go} + \tfrac12\hat{\mathbf a}_T\,t_{go}^2,\qquad
+   \mathbf a_c = \frac{N}{t_{go}^2}\mathbf{ZEM}_\perp + \mathbb I_{\text{boost}}\,g\,\hat{\mathbf z}
+   $$
+
+All laws enforce the lateral acceleration cap and kill-vehicle divert budget, with optional first-order autopilot / DACS actuator lag $\tau$ (`interceptor.tau`):
 
 $$
-\boldsymbol\omega = \frac{\mathbf r\times\mathbf v}{\lVert\mathbf r\rVert^2},\qquad
-\mathbf a_c = N\,(\mathbf v\times\boldsymbol\omega) + g\,\hat{\mathbf z},\qquad
-\lVert\mathbf a_c\rVert \le n_{max}\,g = 30\,g,\qquad
-\int_{t_b}^{t}\lVert\mathbf a_c\rVert\,d\tau \le \Delta v_{KV}.
+\tau\dot{\mathbf a}_{act} + \mathbf a_{act} = \mathbf a_c,\qquad
+\lVert\mathbf a_{act}\rVert \le n_{max}\,g = 30\,g,\qquad
+\int_{t_b}^{t}\lVert\mathbf a_{act}\rVert\,d\tau \le \Delta v_{KV}.
 $$
 
 The command is computed once per step and held over it. Below 20 m range no command is issued.
 
 ## 5. Sensing and tracking
 
-The radar measures Cartesian position and velocity with independent Gaussian noise, $\sigma_p = 25$ m and $\sigma_v = 8$ m/s per axis. A six-state linear Kalman filter tracks the threat with gravity as a known control input and continuous white-noise acceleration of spectral density $q = 30\ \mathrm{m^2/s^3}$ per axis:
+### 5.1 Cartesian vs. Range–Azimuth–Elevation (RAE) radar (`sensor.model`)
+In baseline mode (`cartesian`), the radar measures Cartesian position and velocity with independent Gaussian noise, $\sigma_p = 25$ m and $\sigma_v = 8$ m/s per axis. In polar radar mode (`rae`, used in `configs/advanced.yaml`), the radar at the origin measures range $r$, azimuth $\theta$, elevation $\phi$, and Doppler range-rate $\dot r$ with $\sigma_r = 10$ m, $\sigma_\theta = \sigma_\phi = 1.2$ mrad, and $\sigma_{\dot r} = 3$ m/s. Converting to East–North–Up along the orthonormal radar beam triad $(\mathbf u_r, \mathbf u_\theta, \mathbf u_\phi)$ yields the anisotropic $3\times 3$ position covariance:
+
+$$
+R_p = \sigma_r^2\,\mathbf u_r\mathbf u_r^\top + (r\cos\phi\,\sigma_\theta)^2\,\mathbf u_\theta\mathbf u_\theta^\top + (r\sigma_\phi)^2\,\mathbf u_\phi\mathbf u_\phi^\top .
+$$
+
+### 5.2 6-state linear KF (`kf6`) vs. 7-state Extended Kalman Filter (`ekf7`)
+In baseline mode (`kf6`), a six-state linear Kalman filter tracks $[\mathbf r, \mathbf v]$ with gravity as a known control input and continuous white-noise acceleration of spectral density $q = 30\ \mathrm{m^2/s^3}$ per axis:
 
 $$
 \mathbf x_{k+1} = F\mathbf x_k + B\mathbf u + \mathbf w_k,\qquad \mathbf z_k = H\mathbf x_k + \boldsymbol\nu_k,
@@ -91,7 +117,23 @@ R = \operatorname{diag}(\sigma_p^2 I,\ \sigma_v^2 I),\quad
 Q = q\begin{bmatrix} \tfrac13\Delta t^3 I & \tfrac12\Delta t^2 I\\ \tfrac12\Delta t^2 I & \Delta t\, I\end{bmatrix}.
 $$
 
-The update uses a linear solve for the gain and the Joseph form for the covariance:
+In `configs/advanced.yaml` (`kalman.filter_type: ekf7`), the state vector is augmented with the threat's ballistic drag coefficient $k_T$:
+
+$$
+\mathbf x_7 = \begin{bmatrix}\mathbf r\\ \mathbf v\\ k_T\end{bmatrix}\in\mathbb R^7,\qquad
+\dot{\mathbf r} = \mathbf v,\qquad
+\dot{\mathbf v} = -g\hat{\mathbf z} - k_T\lVert\mathbf v\rVert\mathbf v,\qquad
+\dot k_T = 0.
+$$
+
+The state is propagated over $\Delta t$ with RK4, and the $7\times 7$ covariance $P_7$ is propagated with $\Phi = I_7 + F(\hat{\mathbf x}_7)\Delta t + \tfrac12(F(\hat{\mathbf x}_7)\Delta t)^2$ using the exact analytical Jacobian:
+
+$$
+\frac{\partial\dot{\mathbf v}}{\partial\mathbf v} = -k_T\left(\lVert\mathbf v\rVert I_3 + \frac{\mathbf v\mathbf v^\top}{\lVert\mathbf v\rVert}\right),\qquad
+\frac{\partial\dot{\mathbf v}}{\partial k_T} = -\lVert\mathbf v\rVert\mathbf v.
+$$
+
+Both filters use a linear solve for the Kalman gain and the numerically stable Joseph form for the covariance update:
 
 $$
 S = HP^-H^\top + R,\qquad K = P^-H^\top S^{-1},\qquad \mathbf x = \mathbf x^- + K(\mathbf z - H\mathbf x^-),\qquad P = (I - KH)P^-(I - KH)^\top + KRK^\top .
@@ -99,15 +141,17 @@ $$
 
 The first measurement initializes the state with $P_0 = R$.
 
-**The track-uncertainty layer in the replay.** The viewer draws the filter's $3\sigma$ position ellipsoid: the position block of $P$ is diagonalized every frame, and the semi-axes are $3\sqrt{\lambda_i}$ along the eigenvectors. The geometry is exaggerated 10× about the true threat position (both the ellipsoid and the estimate's offset from the truth), so the threat is inside the shell exactly when the estimate error is inside the $3\sigma$ ellipsoid. With this sensor model the ellipsoid is always a sphere: $H = I$, the per-axis noise is equal and $P_0 = R$, so $F$, $Q$, $R$ and therefore $P$ have the same block structure on every axis. The position block of $P$ is $\sigma^2(t)\,I$ throughout, and the sphere shrinks from $3\sigma_p = 75$ m as the track converges. A range–angle radar would make it a true ellipsoid, and the viewer handles that case.
+**The track-uncertainty layer in the replay.** The viewer draws the filter's $3\sigma$ position ellipsoid: the position block of $P$ is diagonalized every frame, and the semi-axes are $3\sqrt{\lambda_i}$ along the eigenvectors. The geometry is exaggerated 10× about the true threat position (both the ellipsoid and the estimate's offset from the truth), so the threat is inside the shell exactly when the estimate error is inside the $3\sigma$ ellipsoid. With the Cartesian sensor model (`engineering.yaml`) the ellipsoid is a sphere; with the polar RAE sensor model (`advanced.yaml`), it renders as a true oriented pancake ellipsoid aligned with the radar line of sight.
 
 ## 6. Launch decision and kill assessment
 
-**Predicted impact point (PIP).** The drag-free ground crossing from the current estimate:
+**Predicted impact point (PIP).** In `vacuum` mode (`engineering.yaml`), the PIP is the closed-form drag-free ground crossing from the current estimate:
 
 $$
 t^\ast = \frac{v_z + \sqrt{v_z^2 + 2 g z}}{g},\qquad \mathrm{PIP} = (x + v_x t^\ast,\ y + v_y t^\ast).
 $$
+
+In `drag` mode (`advanced.yaml`), `predict_impact_drag` integrates $[\hat{\mathbf r}, \hat{\mathbf v}]$ forward to $z = 0$ with RK4 under the EKF's live estimated drag $\hat k_T$, eliminating the downrange vacuum overshoot.
 
 In engineering mode the interceptor launches once the track is 5 s old, the estimate is descending and $\lVert\mathrm{PIP}\rVert \le R_D$ = 30 km; otherwise the outcome is `NO ENGAGE`. The demo launches on the first descending estimate after 3 s.
 
@@ -167,9 +211,20 @@ With its own model the filter is consistent. Against the dragged threat, NEES is
 
 ### Drag mismatch in the impact prediction
 
-The filter and the PIP ignore drag, while the threat has it. Over 100 seeded threats (`scripts/drag_mismatch.py`) the PIP lies downrange of the true impact point by a median 1.7 km at 80 s to go, 185 m at 40 s and 3 m at 10 s, and the predicted time to impact is too short. In a drag-free control the median along-track error is within ±10 m. At the first launch opportunity, 12 of 100 PIP-gated decisions would launch at a threat that lands outside the defended area, and 1 would hold fire on one that lands inside.
+The baseline 6-state filter and vacuum PIP ignore drag, while the threat has it. Over 100 seeded threats (`scripts/drag_mismatch.py`) the vacuum PIP lies downrange of the true impact point by a median 1.7 km at 80 s to go, 185 m at 40 s and 3 m at 10 s, and the predicted time to impact is too short. In a drag-free control the median along-track error is within ±10 m. At the first launch opportunity, 12 of 100 PIP-gated decisions would launch at a threat that lands outside the defended area, and 1 would hold fire on one that lands inside.
 
 ![PIP bias](figures/pip_bias.png)
+
+### Closing the model-mismatch loop: 7-state EKF + Drag PIP + Augmented PN
+
+`scripts/gnc_trade_study.py` and `scripts/envelope_study.py` compare the baseline GNC stack (`configs/engineering.yaml`) against the upgraded GNC stack (`configs/advanced.yaml`: 7-state EKF estimating $k_T$, RK4 drag-integrated PIP, polar RAE radar, and Augmented PN in the free-falling relative frame) on the exact same physical interceptor (150 kN boost for 5 s, 30 g limit, 435 m/s divert budget, 10 m kill radius):
+
+- **PIP accuracy**: Integrating the ground crossing with the EKF's estimated drag $\hat k_T$ eliminates the 1.7 km early downrange bias of the vacuum predictor.
+- **Divert $\Delta v$ efficiency & battlespace expansion**: By compensating for estimated target drag deceleration in midcourse and eliminating the continuous $+1\,g$ coast bias (since gravity cancels identically between free-falling bodies), Augmented PN slashes kill-vehicle divert $\Delta v$ consumption by more than half and expands the lethal battlespace across high-range, high-altitude threats (rescuing divert-limited misses such as Seed 13 from a 16.7 m miss to a 1.96 m hit using only 136.8 m/s of divert $\Delta v$).
+
+![GNC trade study](figures/gnc_trade_study.png)
+
+![Defensive engagement envelope](figures/engagement_envelope.png)
 
 ### Batch statistics
 
@@ -183,9 +238,9 @@ The filter and the PIP ignore drag, while the threat has it. Over 100 seeded thr
 
 - **Flat Earth, constant gravity**, no rotation. Acceptable for engagements of tens of kilometres, not for longer flights.
 - **Drag** has a constant coefficient with no atmosphere or Mach dependence, so it acts at full strength at 70 km and overstates the slowing of a real high-altitude threat (a dragged threat takes 1.5–2× its nominal flight time).
-- **The filter and the predictor do not model drag.** The resulting PIP bias and early overconfidence are measured above, not corrected. An extended Kalman filter with a ballistic coefficient, or a predictor that integrates the dragged dynamics, would fix it.
-- **The radar** is an idealized Cartesian position-and-velocity sensor with Gaussian noise at every step: no range–angle geometry, update rate, clutter, dropouts or false tracks.
-- **Point masses**: no attitude dynamics, actuator lag, seeker model, or warhead and lethality model. A kill is geometric (closest approach under 10 m).
+- **Baseline filter & predictor mismatch vs. Advanced EKF**: The baseline preset (`configs/engineering.yaml`) intentionally uses a 6-state drag-free filter and vacuum predictor so the resulting PIP bias and early overconfidence can be measured (`scripts/drag_mismatch.py`, `scripts/filter_consistency.py`). `configs/advanced.yaml` resolves both with a 7-state Extended Kalman Filter (`kalman.filter_type: ekf7`) that estimates $k_T$ online and an RK4 drag-integrated impact predictor (`kalman.pip_mode: drag`).
+- **Radar measurement model**: The baseline preset uses an idealized Cartesian position-and-velocity sensor (`sensor.model: cartesian`), whereas `configs/advanced.yaml` uses a polar Range–Azimuth–Elevation (RAE) + Doppler radar (`sensor.model: rae`) with beam-aligned $6\times 6$ covariance; neither models update-rate scheduling, clutter, dropouts, or false tracks.
+- **Point masses**: no 6-DOF attitude dynamics, seeker field-of-view limits, or warhead/lethality fragmentation model. An optional 1st-order actuator lag (`interceptor.tau`) is supported, and a kill is geometric (closest approach under 10 m).
 - **Propulsion** has constant thrust and specific impulse. The divert budget is a Δv limit, not propellant mass.
 - **Guidance timing**: the command is held over each step, so the closed loop converges at first order in Δt whatever the integrator. The vehicle dynamics between commands are integrated at the integrator's order.
 - **Visualization**: vehicle models are drawn about 8× real size and the uncertainty ellipsoid 10×. In the Analysis Guidance tab, both the true and the filter-perceived LOS rate and zero-effort miss are plotted together so the effect of estimation noise and unmodeled drag on the guidance law can be inspected directly.

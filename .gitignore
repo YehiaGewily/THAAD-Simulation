@@ -4,3 +4,6 @@ __pycache__/
 /site/
 viewer/node_modules/
 viewer/dist/
+private plans/
+.claude/
+
