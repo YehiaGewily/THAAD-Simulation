@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>THAAD GNC Workstation</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23121315'/%3E%3Cpath d='M5 25a15 15 0 0 1 22 0' stroke='%239b9da2' stroke-width='2' fill='none'/%3E%3Cpath d='M9 25L22 9' stroke='%23d6d7d9' stroke-width='2'/%3E%3Ccircle cx='22' cy='9' r='2.6' fill='%23e0594a'/%3E%3C/svg%3E">
+  <!-- KaTeX typesets the Methods equations; offline they fall back to plain text -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/vendor/three/build/three.module.js",
+      "three/addons/": "/vendor/three/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand-block">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M5 25a15 15 0 0 1 22 0" stroke="currentColor" stroke-width="2" fill="none" opacity="0.55"/>
+        <path d="M9 25L22 9" stroke="currentColor" stroke-width="2"/>
+        <circle cx="22" cy="9" r="2.6" fill="var(--c-threat)"/>
+      </svg>
+      <strong class="brand-text">THAAD GNC</strong>
+    </div>
+
+    <form id="sim-form" class="sim-controls" autocomplete="off" novalidate>
+      <label class="field">
+        <span>Preset</span>
+        <select id="ctrl-preset" title="Curated scenarios"></select>
+      </label>
+      <div class="field">
+        <label for="ctrl-seed">Seed</label>
+        <div class="seed-wrap">
+          <input id="ctrl-seed" type="number" min="0" max="999999" value="13">
+          <button type="button" id="btn-rand-seed" class="btn-mini" title="Random seed and run">rnd</button>
+        </div>
+      </div>
+
+      <details class="dropdown" id="param-menu">
+        <summary class="btn ghost" title="Config, estimator, radar, guidance and vehicle limits">
+          <span>Parameters</span>
+          <span id="param-summary" class="param-summary mono"></span>
+          <svg class="chev" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" fill="none" stroke-width="1.3"/></svg>
+        </summary>
+        <div class="dropdown-panel param-grid">
+          <div class="param-col">
+            <h4>Scenario &amp; estimation</h4>
+            <label class="prow"><span>Config</span>
+              <select id="ctrl-config">
+                <option value="configs/advanced.yaml">advanced</option>
+                <option value="configs/engineering.yaml">engineering</option>
+                <option value="configs/demo.yaml">demo</option>
+              </select>
+            </label>
+            <label class="prow"><span>Filter</span>
+              <select id="ctrl-filter">
+                <option value="ekf7">EKF7, drag-estimating</option>
+                <option value="kf6">KF6, linear</option>
+              </select>
+            </label>
+            <label class="prow"><span>Impact prediction</span>
+              <select id="ctrl-pip">
+                <option value="drag">RK4 with drag</option>
+                <option value="vacuum">Vacuum</option>
+              </select>
+            </label>
+            <label class="prow"><span>Radar</span>
+              <select id="ctrl-sensor">
+                <option value="rae">Polar (R, az, el)</option>
+                <option value="cartesian">Cartesian</option>
+              </select>
+            </label>
+          </div>
+          <div class="param-col">
+            <h4>Guidance &amp; vehicle</h4>
+            <label class="prow"><span>Guidance law</span>
+              <select id="ctrl-law">
+                <option value="apn">Augmented PN</option>
+                <option value="zem">Optimal ZEM</option>
+                <option value="pn">Classical PN</option>
+              </select>
+            </label>
+            <label class="prow"><span>Nav. gain N</span>
+              <input id="ctrl-pn" type="number" min="1" max="8" step="0.1" value="4.0" title="Navigation gain N">
+            </label>
+            <label class="prow"><span>Divert Δv <em>m/s</em></span>
+              <input id="ctrl-dv" type="number" min="50" max="5000" step="5" value="435" placeholder="unlimited" title="Kill vehicle divert budget in m/s; leave empty for unlimited">
+            </label>
+            <label class="prow"><span>Actuator lag τ <em>s</em></span>
+              <input id="ctrl-tau" type="number" min="0" max="0.5" step="0.01" value="0.00" title="First-order DACS time constant (s)">
+            </label>
+            <label class="prow"><span>Lateral limit <em>g</em></span>
+              <input id="ctrl-maxg" type="number" min="10" max="100" step="5" value="30" title="Lateral acceleration limit (g)">
+            </label>
+          </div>
+          <p class="param-note">Changes apply on the next Run.</p>
+        </div>
+      </details>
+
+      <div class="ctrl-actions">
+        <button type="submit" id="btn-run-sim" class="btn primary" title="Run the simulation with these settings">Run</button>
+        <button type="button" id="btn-compare-seed" class="btn ghost" title="Run KF6+PN, EKF7+APN and EKF7+ZEM on this seed and overlay them">Compare laws</button>
+      </div>
+      <span id="run-status" class="run-status mono" aria-live="polite"></span>
+    </form>
+
+    <nav id="workspace-tabs" aria-label="Workspace">
+      <button type="button" data-ws="split" class="active">Engagement</button>
+      <button type="button" data-ws="charts">Analysis</button>
+      <button type="button" data-ws="batch">Monte Carlo</button>
+      <button type="button" data-ws="methods">Methods</button>
+    </nav>
+    <div class="busy-bar" aria-hidden="true"></div>
+  </header>
+
+  <section id="transport-bar">
+    <div class="transport-left">
+      <div class="transport-btns">
+        <button type="button" id="btn-restart" class="btn-icon" title="Restart (Home)" aria-label="Restart">
+          <svg viewBox="0 0 12 12"><path d="M2 2v8M10 2L4 6l6 4z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="btn-step-back" class="btn-icon" title="Step back 0.1 s (←, Shift for 1 s)" aria-label="Step back">
+          <svg viewBox="0 0 12 12"><path d="M8.5 2.5L4 6l4.5 3.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        </button>
+        <button type="button" id="btn-play" class="btn-icon play is-playing" title="Play / pause (Space)" aria-label="Play or pause">
+          <svg class="i-play" viewBox="0 0 12 12"><path d="M3.5 2l6 4-6 4z" fill="currentColor"/></svg>
+          <svg class="i-pause" viewBox="0 0 12 12"><path d="M3.5 2.5h1.8v7H3.5zM6.7 2.5h1.8v7H6.7z" fill="currentColor"/></svg>
+        </button>
+        <button type="button" id="btn-step-fwd" class="btn-icon" title="Step forward 0.1 s (→, Shift for 1 s)" aria-label="Step forward">
+          <svg viewBox="0 0 12 12"><path d="M3.5 2.5L8 6 3.5 9.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        </button>
+      </div>
+      <div class="clock-box mono">
+        <span class="clock-prefix">T+</span><span id="mission-clock">000.00</span><span class="clock-unit">s</span>
+      </div>
+      <span id="phase-badge" class="phase-pill mono">TRACKING</span>
+    </div>
+
+    <div class="timeline-container">
+      <div id="phase-jumps" class="phase-jumps"></div>
+      <div class="scrubber-wrap">
+        <div id="timeline-markers"></div>
+        <input id="timeline-slider" type="range" min="0" max="100" step="0.01" value="0" aria-label="Mission time">
+      </div>
+    </div>
+
+    <div class="transport-right">
+      <label class="field" title="Playback speed">
+        <span>Speed</span>
+        <select id="ctrl-speed">
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="5">5×</option>
+          <option value="10">10×</option>
+        </select>
+      </label>
+      <label class="check" title="Slow playback near closest approach">
+        <input type="checkbox" id="chk-slowmo" checked>
+        <span>Slow at CPA</span>
+      </label>
+    </div>
+  </section>
+
+  <div id="compare-banner" hidden>
+    <div class="cmp-title">Comparison</div>
+    <div id="compare-legend" class="cmp-legend"></div>
+    <button type="button" id="btn-clear-compare" class="btn-mini">Clear</button>
+  </div>
+
+  <main id="workspace" class="ws-split">
+    <!-- ENGAGEMENT: 3D view -->
+    <section id="pane-3d" class="pane">
+      <header class="pane-head">
+        <div class="pane-title">
+          <strong>3D</strong>
+          <span class="pane-sub">ENU, km</span>
+        </div>
+        <div class="pane-tools">
+          <details class="dropdown align-right">
+            <summary class="tool-btn" title="Camera and vehicle scale">
+              <span class="dim">Camera</span> <span id="cam-label">Arena</span>
+              <svg class="chev" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" fill="none" stroke-width="1.3"/></svg>
+            </summary>
+            <div class="dropdown-panel view-panel">
+              <div class="menu-list" id="cam-mode-btns">
+                <button type="button" data-cam="arena" class="active">Arena</button>
+                <button type="button" data-cam="both">Midpoint</button>
+                <button type="button" data-cam="threat">Follow threat</button>
+                <button type="button" data-cam="kv">Follow interceptor</button>
+                <button type="button" data-cam="cpa">Closest approach</button>
+                <button type="button" data-cam="top">Top</button>
+                <button type="button" data-cam="side">Side</button>
+              </div>
+              <label class="scale-ctrl" title="Magnify vehicles, vectors and the 3σ ellipsoid">
+                <span>Vehicle scale</span>
+                <input id="slider-vscale" type="range" min="1" max="40" step="1" value="12">
+                <span id="lbl-vscale" class="mono">12×</span>
+              </label>
+            </div>
+          </details>
+          <details class="dropdown align-right">
+            <summary class="tool-btn">Layers
+              <svg class="chev" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" fill="none" stroke-width="1.3"/></svg>
+            </summary>
+            <div class="dropdown-panel layer-bar">
+              <label class="check"><input type="checkbox" id="chk-seeker" checked> Seeker inset</label>
+              <hr>
+              <label class="check"><input type="checkbox" data-layer="radar" checked> Radar returns</label>
+              <label class="check"><input type="checkbox" data-layer="track" checked> Kalman track</label>
+              <label class="check"><input type="checkbox" data-layer="cov" checked> 3σ ellipsoid</label>
+              <label class="check"><input type="checkbox" data-layer="vectors" checked> Vectors (v, a<sub>c</sub>, ZEM)</label>
+              <label class="check"><input type="checkbox" data-layer="pip" checked> PIP footprint &amp; arcs</label>
+              <label class="check"><input type="checkbox" data-layer="los" checked> Line of sight &amp; beam</label>
+              <label class="check"><input type="checkbox" data-layer="dome" checked> Defended area</label>
+              <label class="check"><input type="checkbox" data-layer="grid" checked> Range / altitude grid</label>
+            </div>
+          </details>
+        </div>
+      </header>
+      <div id="viewport-3d" class="viewport-body">
+        <div id="overlay-3d-labels"></div>
+        <div class="viewport-hint">drag orbit · right-drag pan · scroll zoom</div>
+
+        <div class="seeker-inset" id="cell-seeker">
+          <div class="t2d-label">
+            <span id="seeker-title">KV seeker</span>
+            <span id="seeker-fov" class="mono dim">FOV 2.0°</span>
+          </div>
+          <div id="seeker-viewport">
+            <svg id="seeker-reticle" viewBox="0 0 240 135" preserveAspectRatio="xMidYMid meet">
+              <path d="M100 67.5H45M140 67.5H195M120 47.5V15M120 87.5V120" stroke="currentColor" stroke-width="0.8" opacity="0.35"/>
+              <path d="M25 25H12V40M215 25H228V40M25 110H12V95M215 110H228V95" stroke="currentColor" stroke-width="1" fill="none" opacity="0.55"/>
+              <rect x="92" y="45" width="56" height="45" stroke="currentColor" stroke-width="0.7" fill="none" stroke-dasharray="3 2" opacity="0.4"/>
+              <circle id="ret-zem-ring" cx="120" cy="67.5" r="18" stroke="#d4a24c" stroke-width="1" fill="none" opacity="0.8"/>
+              <line id="ret-ac-vec" x1="120" y1="67.5" x2="120" y2="67.5" stroke="#5aa6d6" stroke-width="1.6"/>
+              <circle id="ret-los-dot" cx="120" cy="67.5" r="3" fill="#e0594a"/>
+            </svg>
+            <div class="seeker-hud-overlay mono">
+              <span id="seeker-hud-l">RNG —</span>
+              <span id="seeker-hud-r">ZEM —</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ENGAGEMENT: telemetry sidebar -->
+    <section id="pane-telemetry" class="pane">
+      <header class="pane-head">
+        <div class="pane-title">
+          <strong>Telemetry</strong>
+          <span id="sim-meta-tag" class="pane-sub mono"></span>
+        </div>
+        <button type="button" id="btn-export-csv" class="tool-btn" title="Export the full telemetry time series as CSV">CSV</button>
+      </header>
+      <div class="telemetry-body">
+        <div id="bda-card" class="bda-card">
+          <div class="bda-header">
+            <strong id="bda-headline">Evaluating engagement</strong>
+            <span id="outcome-badge" class="badge">loading</span>
+          </div>
+          <div id="bda-subline" class="bda-sub mono"></div>
+          <div id="bda-metrics" class="bda-metrics"></div>
+        </div>
+
+        <details class="inst-card threat-card" open>
+          <summary class="inst-head">
+            <span class="key"><i></i>Threat</span>
+            <span id="ro-th-status" class="tag-mini">AIRBORNE</span>
+          </summary>
+          <div class="inst-rows">
+            <div><span>Altitude</span><strong id="ro-th-alt">—</strong></div>
+            <div><span>Speed</span><strong id="ro-th-spd">—</strong></div>
+            <div><span>Ground range</span><strong id="ro-th-rng">—</strong></div>
+            <div><span>E, N, U <em>km</em></span><strong id="ro-th-pos">—</strong></div>
+            <div><span>Drag k<sub>T</sub> (true)</span><strong id="ro-th-drag">—</strong></div>
+          </div>
+        </details>
+
+        <details class="inst-card kv-card" open>
+          <summary class="inst-head">
+            <span class="key"><i></i>Interceptor</span>
+            <span id="ro-kv-stage" class="tag-mini">STANDBY</span>
+          </summary>
+          <div class="inst-rows">
+            <div><span>Altitude</span><strong id="ro-kv-alt">—</strong></div>
+            <div><span>Speed</span><strong id="ro-kv-spd">—</strong></div>
+            <div><span>Commanded accel</span><strong id="ro-kv-g">—</strong></div>
+            <div><span>Mass</span><strong id="ro-kv-mass">—</strong></div>
+            <div><span>Divert Δv used</span><strong id="ro-kv-dv">—</strong></div>
+          </div>
+          <div class="meter-bars">
+            <div class="meter-row">
+              <span>g load</span>
+              <div class="meter-track"><div id="bar-g" class="meter-fill kv"></div></div>
+            </div>
+            <div class="meter-row" id="row-bar-dv">
+              <span>Δv left</span>
+              <div class="meter-track"><div id="bar-dv" class="meter-fill accent"></div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="inst-card guid-card" open>
+          <summary class="inst-head">
+            <span class="key"><i></i>Guidance</span>
+            <span id="ro-guid-law" class="tag-mini">APN</span>
+          </summary>
+          <div class="inst-rows">
+            <div><span>Separation ‖r‖</span><strong id="ro-en-sep">—</strong></div>
+            <div><span>Closing speed V<sub>c</sub></span><strong id="ro-en-vc">—</strong></div>
+            <div><span>Time to go</span><strong id="ro-en-ttg">—</strong></div>
+            <div><span>ZEM true / est <em>m</em></span><strong id="ro-en-zem">—</strong></div>
+            <div><span>LOS rate true / est <em>mrad/s</em></span><strong id="ro-en-los">—</strong></div>
+          </div>
+        </details>
+
+        <details class="inst-card kf-card">
+          <summary class="inst-head">
+            <span class="key"><i></i>Estimator</span>
+            <span id="ro-kf-type" class="tag-mini">EKF7</span>
+          </summary>
+          <div class="inst-rows">
+            <div><span>Position error</span><strong id="ro-kf-pos">—</strong></div>
+            <div><span>Velocity error</span><strong id="ro-kf-vel">—</strong></div>
+            <div><span>NEES / NIS</span><strong id="ro-kf-nees">—</strong></div>
+            <div><span>Drag k̂<sub>T</sub> (est)</span><strong id="ro-kf-drag">—</strong></div>
+            <div><span>PIP bias (vacuum)</span><strong id="ro-kf-pip">—</strong></div>
+          </div>
+        </details>
+
+        <details class="inst-card event-log-box" open>
+          <summary class="inst-head">
+            <span class="key plain">Events</span>
+            <span class="tag-mini">click to jump</span>
+          </summary>
+          <ol id="event-log-list" class="event-list"></ol>
+        </details>
+      </div>
+    </section>
+
+    <!-- ANALYSIS: tactical 2D -->
+    <section id="pane-2d" class="pane">
+      <header class="pane-head">
+        <div class="pane-title">
+          <strong>Tactical</strong>
+        </div>
+        <div class="btn-strip" id="tactical-submode">
+          <button type="button" data-t2d="split" class="active">Both</button>
+          <button type="button" data-t2d="elev">Elevation</button>
+          <button type="button" data-t2d="plan">Plan</button>
+        </div>
+      </header>
+      <div id="tactical-grid" class="tactical-grid mode-split">
+        <div class="t2d-cell" id="cell-elev">
+          <div class="t2d-label"><span>Elevation</span><span class="dim">altitude vs ground range, km</span></div>
+          <canvas id="canvas-elev"></canvas>
+        </div>
+        <div class="t2d-cell" id="cell-plan">
+          <div class="t2d-label"><span>Plan</span><span class="dim">east vs north, km</span></div>
+          <canvas id="canvas-plan"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANALYSIS: plots -->
+    <section id="pane-charts" class="pane">
+      <header class="pane-head">
+        <div class="pane-title">
+          <strong>Plots</strong>
+          <span class="pane-sub">hover to read · click or drag to scrub</span>
+        </div>
+        <div class="btn-strip" id="chart-filter-tabs">
+          <button type="button" data-cgrp="essential" class="active">Key</button>
+          <button type="button" data-cgrp="kin">Kinematics</button>
+          <button type="button" data-cgrp="gui">Guidance</button>
+          <button type="button" data-cgrp="kf">Filter</button>
+          <button type="button" data-cgrp="all">All</button>
+        </div>
+      </header>
+      <div id="charts-grid" class="charts-grid"></div>
+    </section>
+
+    <section id="pane-batch" class="pane" hidden>
+      <header class="pane-head">
+        <div class="pane-title">
+          <strong>Monte Carlo</strong>
+        </div>
+        <div class="pane-tools">
+          <label class="field">
+            <span>Saved</span>
+            <select id="batch-dataset-select">
+              <option value="engineering">engineering · 1000 runs</option>
+              <option value="demo">demo · 1000 runs</option>
+            </select>
+          </label>
+          <span class="tool-sep"></span>
+          <div class="live-batch-bar field">
+            <span>Live</span>
+            <input id="live-batch-n" type="number" min="5" max="300" value="20" title="Number of seeds to simulate with the current parameters">
+            <span class="dim">seeds</span>
+            <button type="button" id="btn-run-live-batch" class="btn">Run batch</button>
+          </div>
+        </div>
+      </header>
+      <div id="batch-content" class="batch-body"></div>
+    </section>
+
+    <section id="pane-methods" class="pane" hidden>
+      <header class="pane-head">
+        <div class="pane-title">
+          <strong>Methods</strong>
+          <span class="pane-sub">equations and the parameters of the loaded run</span>
+        </div>
+      </header>
+      <div id="methods-content" class="methods-body"></div>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

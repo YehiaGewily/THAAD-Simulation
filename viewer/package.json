@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && vite build --mode dashboard",
-    "record-gif": "node tools/record_gif.mjs"
+    "record-gif": "node tools/record_gif.mjs",
+    "record-workstation-gif": "node tools/record_workstation_gif.mjs"
   },
   "dependencies": {
     "three": "0.160.0"
