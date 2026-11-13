@@ -44,7 +44,18 @@ def main(argv=None):
                         help="write the replay file without opening it")
     parser.add_argument("--out", type=Path, default=None, metavar="PATH",
                         help="replay file to write (default: replays/replay_<timestamp>.html)")
+    parser.add_argument("--serve", action="store_true",
+                        help="launch the live FastAPI GNC Telemetry Workstation server")
+    parser.add_argument("--port", type=int, default=8765,
+                        help="port for --serve (default: 8765)")
     args = parser.parse_args(argv)
+
+    if args.serve:
+        from .server import main as server_main
+        srv_args = ["--port", str(args.port)]
+        if args.no_browser:
+            srv_args.append("--no-browser")
+        return server_main(srv_args)
 
     console = Console()
     cfg = load_config(args.config)

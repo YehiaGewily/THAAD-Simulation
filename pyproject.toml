@@ -17,12 +17,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest"]
 plot = ["matplotlib"]   # scripts/*.py figures
+workstation = ["fastapi", "uvicorn", "pydantic>=2"]   # python -m thaad_sim --serve
 
 [tool.setuptools]
 packages = ["thaad_sim"]
 
 [tool.setuptools.package-data]
-thaad_sim = ["viewer/*.html"]
+thaad_sim = ["viewer/*.html", "workstation/*.html", "workstation/*.css", "workstation/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
