@@ -6,7 +6,7 @@ All simulation modes, CLI runs, Monte Carlo campaigns, and live workstation sess
 
 ## 1. Installation
 
-Requires **Python 3.9 or newer** (no Node.js is required to run simulations, batches, or the compiled static replays).
+Requires **Python 3.10 or newer** (no Node.js is required to run simulations, batches, or the compiled static replays).
 
 ```bash
 pip install -e ".[dev]"                  # Core simulator + pytest suite
