@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "THAAD-Style Terminal Intercept Simulation"
+abstract: "A deterministic Python simulation of terminal ballistic missile defense: radar sensing, Kalman/EKF estimation, impact-point fire control, PN/APN/ZEM guidance, and hit-to-kill two-stage vehicle dynamics, with a live web workstation. Educational; uses only illustrative, unclassified parameters."
+type: software
+version: 1.0.0
+date-released: 2026-11-14
+license: MIT
+repository-code: "https://github.com/YehiaGewily/THAAD-Simulation"
+authors:
+  - family-names: Gewily
+    given-names: Yehia
+keywords:
+  - guidance
+  - navigation
+  - control
+  - kalman filter
+  - proportional navigation
+  - missile defense
+  - simulation

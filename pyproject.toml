@@ -4,9 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thaad-sim"
-version = "0.1.0"
+version = "1.0.0"
 description = "Educational THAAD-style terminal intercept simulation with a 3D browser replay"
 readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Yehia Gewily" }]
 requires-python = ">=3.10"
 dependencies = [
     "numpy",

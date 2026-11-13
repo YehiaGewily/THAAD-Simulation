@@ -122,3 +122,9 @@ Two browser tools sit on top of `thaad_sim/` without altering the physics core (
 Analytical point-mass sandbox: flat Earth with constant gravity, constant quadratic drag coefficient (no exponential atmosphere $\rho(z)$ or Mach $C_D(M)$ table), and no 6-DOF attitude or physical seeker gimbal dynamics ([docs/methods.md §8](docs/methods.md#8-limitations)).
 
 **Possible extensions:** multi-target salvos (shoot-look-shoot fire control), US Standard Atmosphere $\rho(z)$ and Mach drag curves $C_D(M)$, and 6-DOF rigid-body dynamics with strapdown/gimballed terminal IR seeker tracking.
+
+---
+
+## License & Citation
+
+Released under the [MIT License](LICENSE). If you use this software in research or teaching, please cite it via [CITATION.cff](CITATION.cff) (GitHub's "Cite this repository" button).
