@@ -228,7 +228,7 @@ The baseline 6-state filter and vacuum PIP ignore drag, while the threat has it.
 
 ### Batch statistics
 
-`python -m thaad_sim.batch` runs N seeded engagements; rates are reported with 95 % Wilson score intervals. Over seeds 0–999, engineering mode engages 960 threats and kills 575 of them: 59.9 % (95 % CI 56.8–63.0 %). All 385 misses had spent the full divert budget. The demo kills 1000 of 1000 (95 % CI 99.6–100 %). `python -m thaad_sim.dashboard results/engineering.csv` collects these results with the studies above in one page.
+`python -m thaad_sim.batch` runs N seeded engagements; rates are reported with 95 % Wilson score intervals. Over seeds 0–999, engineering mode engages 960 threats and kills 575 of them: 59.9 % (95 % CI 56.8–63.0 %). All 385 misses had spent the full divert budget. The demo kills 1000 of 1000 (95 % CI 99.6–100 %). `python -m thaad_sim.dashboard results/engineering.csv` collects these results with the studies above in one page. The workstation's live Monte Carlo (§9) calls the same per-run metrics through the same process pool, so a live batch over seeds 0 to N−1 matches the first N rows of the CSV for the same settings.
 
 ### Colour and contrast
 
@@ -243,4 +243,25 @@ The baseline 6-state filter and vacuum PIP ignore drag, while the threat has it.
 - **Point masses**: no 6-DOF attitude dynamics, seeker field-of-view limits, or warhead/lethality fragmentation model. An optional 1st-order actuator lag (`interceptor.tau`) is supported, and a kill is geometric (closest approach under 10 m).
 - **Propulsion** has constant thrust and specific impulse. The divert budget is a Δv limit, not propellant mass.
 - **Guidance timing**: the command is held over each step, so the closed loop converges at first order in Δt whatever the integrator. The vehicle dynamics between commands are integrated at the integrator's order.
-- **Visualization**: vehicle models are drawn about 8× real size and the uncertainty ellipsoid 10×. In the Analysis Guidance tab, both the true and the filter-perceived LOS rate and zero-effort miss are plotted together so the effect of estimation noise and unmodeled drag on the guidance law can be inspected directly.
+- **Visualization**: in the replay, vehicle models are drawn about 8× real size and the uncertainty ellipsoid 10×; the workstation's vehicle scale is adjustable (12× by default). In the Analysis Guidance tab, both the true and the filter-perceived LOS rate and zero-effort miss are plotted together so the effect of estimation noise and unmodeled drag on the guidance law can be inspected directly.
+
+## 9. Live workstation
+
+`python -m thaad_sim --serve` (`thaad_sim/server.py`) wraps the simulation in a small FastAPI app. Each request applies the form's settings as overrides on a config file (filter type, PIP mode, sensor model, guidance law, navigation gain, divert budget, actuator lag, g limit), calls the same `simulate()` as the CLI, and returns the history packed by `thaad_sim/telemetry.py`. Picking a different filter does not otherwise change the config, except that switching a config tuned for `kf6` ($q \ge 25$) to `ekf7` lowers the process noise to $q = 5\ \mathrm{m^2/s^3}$ unless it is set explicitly.
+
+`telemetry.py` derives the per-frame series that the Engagement readouts and the Analysis plots show. With $\mathbf r = \mathbf r_T - \mathbf r_I$ and $\mathbf v = \mathbf v_T - \mathbf v_I$ from the truth, and the same quantities from the filter estimate for the "est" series:
+
+$$
+V_c = -\frac{\mathbf r\cdot\mathbf v}{\lVert\mathbf r\rVert},\qquad
+t_{go} = \frac{\lVert\mathbf r\rVert}{V_c},\qquad
+\lVert\boldsymbol\omega\rVert = \frac{\lVert\mathbf r\times\mathbf v\rVert}{\lVert\mathbf r\rVert^2},\qquad
+\mathbf{ZEM} = \mathbf r + \mathbf v\,\max\!\left(0, -\frac{\mathbf r\cdot\mathbf v}{\lVert\mathbf v\rVert^2}\right).
+$$
+
+These readouts use the drag-free ZEM; the ZEM guidance law adds the estimated target drag term (§4). The divert Δv shown is the integral of the achieved lateral acceleration over the kill vehicle's coast, and the impact-prediction error is the horizontal distance from the instantaneous PIP (vacuum, or drag-integrated every 10 frames in `drag` mode) to the true impact point, found by integrating the true threat state to the ground. Terminal homing is marked when the kill vehicle is coasting within 15 km of the threat; the model has no seeker, so this is a display phase only.
+
+The line-of-sight rate diverges as $\lVert\mathbf r\rVert \to 0$ at closest approach, so its plot scales the axis to 1.6× the 97th percentile of the run rather than to the final spike; values above the axis are drawn at the top edge. All other plots use the full data range.
+
+Comparing guidance laws runs three requests on one seed: KF6 with vacuum PIP and PN on `engineering.yaml`, and EKF7 with drag PIP, polar radar and APN or ZEM on `advanced.yaml`, all with the form's divert budget, navigation gain and g limit and no actuator lag. The threat is identical across the three because the scenario depends only on the seed.
+
+![The workstation's Monte Carlo tab: outcome rates with Wilson intervals and metric histograms for the committed engineering batch](figures/workstation_montecarlo.png)

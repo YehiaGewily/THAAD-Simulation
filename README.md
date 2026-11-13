@@ -1,309 +1,124 @@
 # THAAD-Style Terminal Intercept Simulation
 
-A Python study of guidance, navigation and control for "hitting a bullet with a bullet", with a 3D replay in the browser.
+A deterministic Python simulation of **terminal ballistic missile defense**—modeling radar sensing, Kalman state estimation, impact-point fire control, proportional/optimal guidance, and hit-to-kill two-stage vehicle dynamics.
 
-![A simulated engagement: the threat descends, the kill vehicle closes in and intercepts it at 37.9 km](docs/figures/demo.gif)
-
-**[Try it live](https://yehiagewily.github.io/THAAD-Simulation/)**: open a [3D replay](https://yehiagewily.github.io/THAAD-Simulation/replay.html) of an engagement, or the [batch results dashboard](https://yehiagewily.github.io/THAAD-Simulation/dashboard.html) over 1000 seeded runs. Nothing to install.
-
-> ⚠️ An educational and hobby simulation. It models no real weapon system, and the numbers are illustrative, not real-world data.
+> ⚠️ An educational and hobby simulation. It models no real weapon system, and all vehicle, sensor, and engagement numbers are illustrative.
 
 ---
 
-## What it does
+## Documentation Map
 
-The code closes a simplified but complete engagement loop:
-
-1. **Detection**: a radar sensor (`cartesian` or polar Range–Azimuth–Elevation `rae` with Doppler range-rate) returns noisy 3D measurements of a ballistic threat.
-2. **Estimation**: a 6-state linear Kalman filter (`kf6`) or a 7-state Extended Kalman Filter (`ekf7`) that jointly estimates the threat's ballistic drag coefficient $k_T$.
-3. **Decision**: fire control predicts the impact point (closed-form `vacuum` or RK4 `drag`-integrated PIP) and launches only if it falls inside the defended area.
-4. **Guidance**: selectable guidance law (`pn`, Augmented PN `apn` with EKF target-drag feed-forward, or Optimal Zero-Effort Miss `zem`) with optional 1st-order actuator lag $\tau$.
-5. **Physics**: a two-stage interceptor with mass flow from thrust and specific impulse, drag, gravity and a kill-vehicle divert budget, integrated with RK4.
-6. **Assessment**: continuous closest-point-of-approach kill detection and a battle-damage summary.
-
-Every run is a pure function of a YAML config and a seed, and opens as a self-contained HTML replay. [docs/methods.md](docs/methods.md) has the equations, assumptions, verification results and limitations.
-
-## How to run the project
-
-### 1. Install the Python package
-
-You need **Python 3.9 or newer** (no Node.js is required just to run simulations — the compiled 3D viewer template is already bundled inside `thaad_sim/viewer/`). From the project root:
-
-```bash
-pip install -e ".[dev]"
-```
-
-*(On Windows, if `python` is not on your `PATH`, use the Python Launcher `py -m pip install -e ".[dev]"` and `py -m thaad_sim ...`.)*
-
-### 2. Run a single engagement and open the 3D replay viewer
-
-Run one engagement in **engineering mode** (the default and recommended mode):
-
-```bash
-python -m thaad_sim --config configs/engineering.yaml
-```
-
-The terminal prints the live event log and a battle-damage assessment table, writes a self-contained HTML replay to `replays/replay_<timestamp>.html`, and opens it automatically in your browser.
-
-Each run prints its random seed so you can replay notable scenarios deterministically:
-
-```bash
-# Direct kinetic hit at 37.9 km altitude (1.79 m miss distance):
-python -m thaad_sim --config configs/engineering.yaml --seed 913
-
-# Divert-budget exhaustion & close miss (16.7 m CPA miss, shows the CPA endgame micro-view & ground impact):
-python -m thaad_sim --config configs/engineering.yaml --seed 13
-
-# Advanced GNC rescue of Seed 13 (7-state EKF + RAE polar radar + drag PIP + APN -> 1.96 m hit using only 137 m/s divert):
-python -m thaad_sim --config configs/advanced.yaml --seed 13
-
-# High-performance demo mode (100 % intercept rate):
-python -m thaad_sim --config configs/demo.yaml --seed 42
-```
-
-| CLI Option | Effect |
+| Guide | What's Inside |
 | --- | --- |
-| `--config PATH` | Scenario configuration file (`configs/engineering.yaml`, `configs/advanced.yaml` or `configs/demo.yaml`) |
-| `--seed N` | Replay a scenario; a run is fully determined by config and seed |
-| `--out PATH` | Write the replay to `PATH` instead of `replays/replay_<timestamp>.html` |
-| `--no-browser` | Write the replay HTML file without opening a browser tab |
-| `--legacy-rng` | Draw random numbers like the old single-file scripts, so their printed seeds replay |
+| **Overview (this page)** | Simulation scope, closed-loop architecture, YAML modes, headline results, and repository map |
+| **[How to Run](docs/running.md)** | Installation, CLI deterministic runs, multi-core Monte Carlo & `--sweep` campaigns, `--serve`, and `pytest` |
+| **[Mathematical Model & Verification](docs/methods.md)** | Equations of motion, RK4 burnout splitting, KF6/EKF7, RAE covariance, PN/APN/ZEM laws, and NEES/NIS proofs |
+| **[Viewer Characteristics](docs/visualizers.md)** | Live FastAPI Workstation (`--serve`), offline 3D HTML replays, batch dashboard, controls, and frontend architecture |
 
-Replays are single HTML files with the entire 3D viewer (including Three.js) inlined, so they work offline and can be shared as a single file. Only the fonts and the KaTeX equation renderer in the Methods tab load from a CDN; offline, the equations show as source text.
+---
 
-### 3. Rebuild or live-develop the 3D viewer (optional)
+## What the Simulation Models
 
-If you edit the frontend code under `viewer/src/` or `viewer/replay_template.html`, rebuild the single-file templates with **Node.js**:
+Every engagement runs a closed six-stage GNC loop over flat-Earth East–North–Up (ENU) coordinates, uniquely determined by a YAML config and a random seed:
 
-```bash
-cd viewer
-npm install
-npm run build      # bundles thaad_sim/viewer/replay_template.html & dashboard_template.html
-npm run dev        # starts a Vite live-reload server using your latest replay in replays/
-```
+1. **Detection** — Ballistic threat under quadratic drag; radar returns noisy measurements in `cartesian` coordinates or polar Range–Azimuth–Elevation (`rae`) with Doppler range-rate.
+2. **Estimation** — Tracks the threat using a **6-state linear Kalman filter** (`kf6`, assuming vacuum free-fall) or a **7-state Extended Kalman Filter** (`ekf7`) that estimates the threat's ballistic drag coefficient $k_T$ in flight.
+3. **Fire Control** — Predicts the threat's impact point (`vacuum` parabola or RK4 `drag` integration) and gates launch (`pip_gated` vs. `fire_on_track`) against the defended perimeter.
+4. **Guidance & Control** — Commands lateral acceleration via **Classical PN** (`pn`), **Augmented PN** (`apn` with EKF drag feed-forward), or **Optimal ZEM** (`zem`), constrained by lateral $g$-limits, 1st-order actuator lag $\tau$, and a finite kill-vehicle divert $\Delta v$ budget.
+5. **Physics & Integration** — Two-stage interceptor (booster with mass flow $F / (I_{sp} g_0)$, separation at burnout, kinetic kill vehicle) integrated with **RK4** (with exact burnout sub-step splitting) or Forward Euler.
+6. **Kill Assessment** — Continuous chord closest-point-of-approach (CPA) intersection across kill radius $R_k$ and terminal Battle Damage Assessment.
 
-### Modes
+See **[docs/methods.md](docs/methods.md)** for all governing equations, Jacobians, assumptions, and verification details.
 
-All three modes run the same code. Everything that differs lives in the YAML config.
+---
 
-| Config | Sensor, filter & guidance | Interceptor and threat | Launch rule | Outcome highlight |
-| --- | --- | --- | --- | --- |
-| `configs/engineering.yaml` | Cartesian radar, 6-state linear KF (`kf6`), vacuum PIP, classical PN (`pn`) | 150 kN for 5.0 s (Isp 170 s), 30 g, 435 m/s divert budget, 10 m kill radius | Vacuum PIP inside 30 km defended radius after 5 s | **59.9 %** kill of engaged (575 / 960, 95 % CI 56.8–63.0 %); misses exhaust divert $\Delta v$ |
-| `configs/advanced.yaml` | Polar RAE radar (`rae`), 7-state drag-estimating EKF (`ekf7`), RK4 drag PIP (`drag`), Augmented PN (`apn`) | Identical 150 kN, 5.0 s, 30 g, 435 m/s divert budget, 10 m kill radius | Drag-integrated PIP inside 30 km after 5 s | Rescues divert-limited misses (e.g. **Seed 13**: 16.7 m miss $\to$ **1.96 m hit** with 69 % less divert $\Delta v$) |
-| `configs/demo.yaml` | Cartesian radar, 6-state linear KF, classical PN | 220 kN for 8.0 s (Isp 400 s), 50 g, unlimited divert, 30 m kill radius | Fire on a confirmed, descending track | **100 %** (1000 / 1000, 95 % CI 99.6–100 %) |
+## Modes & Key Engineering Insight
 
-In engineering mode, interception is likely but not guaranteed: every one of the 385 misses had spent the kill vehicle's whole divert budget, and 40 threats predicted to land outside the defended area are not engaged (`NO ENGAGE`). The demo is for watching the geometry with a near-certain hit.
+All scenarios run the exact same simulation code; only YAML settings change (`configs/`):
 
-## The replay viewer
-
-| Feature | |
-| --- | --- |
-| Scene | Terrain with the defended area and range rings, atmospheric strata (20 / 50 / 60 km), radar returns, the Kalman track, the filter's 3σ uncertainty ellipsoid, line of sight, 3D GNC vectors ($\mathbf{v}_T, \mathbf{v}_I, \mathbf{a}_c$, ZEM), dynamic PIP migration trail, $3\sigma$ impact footprint ellipse, vacuum vs. dragged ballistic projection arcs, and CPA kill-radius sphere ($R_k$) |
-| Seeker PiP (`P`) | Picture-in-Picture optical seeker / target-cam inset with a live SVG reticle (LOS-rate dot, commanded acceleration vector $\mathbf{a}_c$, ZEM gate ring, and range/FOV telemetry); click the inset to toggle chase camera |
-| Timeline | Mission clock, a phase stepper (Track → Boost → Midcourse → Terminal → Kill/CPA/Impact) you can click to jump, scrubbing, and slow motion around both intercepts and failed-intercept CPAs |
-| Telemetry | Threat (including live PIP drag-mismatch bias), interceptor (including mass, divert $\Delta v$ used and remaining budget bar) and engagement readouts (including live ZEM and LOS rate), an event log, an interactive 3-mode mini-chart (`Elev`, `Plan`, `ZEM`) with click/drag scrubbing, and a debrief card |
-| Styles (`G`) | **Scientific**, the default: plain trajectories, drop lines, an altitude scale, a scale bar, an ENU axis triad and exact markers. **Cinematic**: glow, a cloud deck, smoke trails, hypersonic shock cone, directional DACS lateral thruster plumes, a radar sweep and explosions |
-| Sim Lab (`S`) | **Live In-Browser Simulation Lab**: run any custom seed in ~3 ms directly in the browser, toggling between `KF6` and `EKF7`, `Vacuum` and `Drag` PIP, `Cartesian` and `Polar RAE` radar, `PN` / `APN` / `ZEM` guidance, divert $\Delta v$ budget, and actuator lag $\tau$ |
-| Analysis (`A`) | Synchronized figures for kinematics, guidance (True vs. Kalman-perceived LOS rate and zero-effort miss, commanded acceleration, divert $\Delta v$) and the Kalman filter (errors against ±3σ, raw against filtered, single-run NEES & NIS consistency, PIP bias, and 7-state EKF drag $\hat{k}_T$ convergence), a Methods tab with every parameter of the run and the command to reproduce it, and **Export CSV** |
-
-| Control | Action |
-| --- | --- |
-| `Space` | Play / pause |
-| `←` / `→` (`Shift` for 5 s) | Step 1 s back / forward |
-| `Home` / `End` | Jump to start / end |
-| `1`–`6` | Playback speed 0.25× – 20× |
-| `C` `O` `T` `I` `V` | Camera: cinematic, free orbit, chase threat, chase interceptor, top-down |
-| `R` `K` `E` `L` `X` `P` `H` `M` | Toggle radar returns, Kalman track, track uncertainty (3σ), line of sight, 3D GNC vectors & PIP, seeker PiP cam, labels, slow motion (also in the **Layers** menu) |
-| `S` | Live In-Browser GNC Simulation Lab |
-| `A` | Analysis panel |
-| `G` | Scientific / cinematic style |
-| `F` | Focus mode: hide the side panels |
-| `?` | All keyboard shortcuts |
-| Mouse | Drag to spin the camera, scroll to zoom, right-drag to pan. Grabbing a chase camera keeps orbiting that vehicle |
-
-**Track uncertainty.** The `E` layer draws the Kalman filter's 3σ position ellipsoid. It is exaggerated 10× about the true threat position (the ellipsoid and the estimate's offset alike), so the threat sits inside the shell exactly when the estimate is within 3σ. With this Cartesian radar model the ellipsoid is a sphere, shrinking from 75 m to a few metres as the track converges. See [Methods §5](docs/methods.md#5-sensing-and-tracking).
-
-**Deep links.** Add a hash to a replay's URL to open it at a given moment, for example `replay.html#t=40&cam=threat&paused`. `&focus` hides the panels, `&analysis&tab=kf` opens an Analysis tab (`kin`, `gui`, `kf`, `methods`), and `&style=cinematic` picks the cinematic look.
-
-Vehicle models are drawn about 8× real size so they read in the close-up cameras.
-
-## Batch runs and the dashboard
-
-```bash
-python -m thaad_sim.batch --config configs/engineering.yaml --n 1000 --seed 0
-```
-
-This runs N seeded engagements on all CPU cores without writing replays, and writes one CSV row per run to `results/<config name>.csv`: outcome, launch and kill times, kill altitude, closing velocity, closest approach, peak acceleration, divert Δv used, impact range and the filter's RMS errors. Run k uses seed `seed + k`, so any row can be replayed in the browser. The same seeds give the same file byte for byte, whatever the number of workers. `--sweep section.field=v1,v2,...` repeats the runs at each value of one config parameter.
-
-```bash
-python -m thaad_sim.dashboard results/engineering.csv --open
-```
-
-This writes `site/dashboard.html`, a self-contained page: outcome rates with 95 % Wilson intervals, histograms of every engagement metric, the Kalman filter consistency study and the integrator convergence study (read from `results/consistency.json` and `results/convergence.json`), each with a table view. [The live dashboard](https://yehiagewily.github.io/THAAD-Simulation/dashboard.html) is this page for the committed engineering CSV.
-
-```bash
-python scripts/summarize.py results/engineering.csv
-```
-
-This prints the same rates as a table and writes matplotlib figures to `docs/figures/`. It handles sweep CSVs too. It needs the `plot` extra: `pip install -e ".[plot]"`.
-
-| Outcome (engineering, seeds 0–999) | k / n | Rate | 95 % Wilson CI |
+| Mode | Radar, Filter & Guidance | Interceptor Limits | Outcome Highlight |
 | --- | --- | --- | --- |
-| KILL | 575 / 1000 | 57.5 % | 54.4–60.5 % |
-| GROUND | 385 / 1000 | 38.5 % | 35.5–41.6 % |
-| NO ENGAGE | 40 / 1000 | 4.0 % | 3.0–5.4 % |
-| engaged | 960 / 1000 | 96.0 % | 94.6–97.0 % |
-| **KILL among engaged** | **575 / 960** | **59.9 %** | **56.8–63.0 %** |
+| [`configs/engineering.yaml`](configs/engineering.yaml) | Cartesian radar, `kf6`, vacuum PIP, classical `pn` | 150 kN (5 s), 30 g, 435 m/s divert budget, 10 m $R_k$ | **59.9%** kill of engaged (575 / 960, 95% CI 56.8–63.0%); all 385 misses exhaust divert $\Delta v$ |
+| [`configs/advanced.yaml`](configs/advanced.yaml) | Polar `rae` radar, `ekf7`, drag PIP, `apn` | Identical 150 kN (5 s), 30 g, 435 m/s divert, 10 m $R_k$ | Rescues divert-limited misses (e.g. **Seed 13**: 16.7 m miss $\to$ **1.96 m hit**, ~69% less $\Delta v$) |
+| [`configs/demo.yaml`](configs/demo.yaml) | Cartesian radar, `kf6`, vacuum PIP, classical `pn` | 220 kN (8 s), 50 g, unlimited divert, 30 m $R_k$ | **100%** (1000 / 1000, 95% CI 99.6–100%) |
 
-![Engineering-mode outcome rates](docs/figures/engineering_outcomes.png)
-
-Over a run, the filter's median RMS 3D error is 3.8 m in position and 3.7 m/s in velocity, against 43.3 m and 13.9 m/s for a single raw radar return. Sweeping the radar position noise from 5 to 100 m moves the kill rate by only 4.4 points: the interceptor misses because of its divert budget, not its track.
-
-![Filter RMS error and kill rate against radar position noise](docs/figures/engineering_sweep_sensor_pos_noise_sweep.png)
-
-## Verification
-
-The numerics, the filter and the statistics are checked against analytic results and against their own stated error models. The scripts below regenerate every figure and number. [Methods §7](docs/methods.md#7-verification) gives the details.
-
-### Integrator convergence
-
-At Δt, Δt/2, Δt/4 and Δt/8, the final-position error of each integrator against a much finer RK4 run falls at the method's formal order. That holds for the dragged threat and for the interceptor flying through burnout, whose step is split at the burnout instant.
-
-| Problem | Observed order, Euler | Observed order, RK4 |
-| --- | --- | --- |
-| Ballistic threat with drag, 40 s | 1.00 | 4.01 |
-| Interceptor boost through burnout, 12.8 s | 0.99 | 4.00 |
-
-![Integrator convergence](docs/figures/convergence.png)
-
-### Analytic tests
-
-With drag off, the threat has a closed-form solution. RK4 reproduces it to 6×10⁻¹¹ m over 40 s, which is rounding. Forward Euler's altitude error equals its predicted truncation error g·t·Δt/2 to within 5×10⁻¹¹ m. The tests also check energy conservation, energy lost to drag against the drag work, the mass flow F/(Isp·g₀), booster separation, and the rocket-equation Δv.
-
-![Analytic check](docs/figures/analytic.png)
-
-### Kalman filter consistency (NEES and NIS)
-
-For a consistent filter, the normalized estimation error squared (NEES) and the normalized innovation squared (NIS) are χ² with 6 degrees of freedom. Averaged over 50 runs, they must stay inside [5.08, 7.00] about 95 % of the time.
-
-| Setting | Mean NEES | Inside bounds | Mean NIS | Inside bounds |
-| --- | --- | --- | --- | --- |
-| Matched model (drag off, truth driven by the filter's Q) | 6.11 | 94.3 % | 5.99 | 95.1 % |
-| As configured (threat with drag) | 5.35 | 58.9 % | 5.92 | 94.6 % |
-
-The filter is consistent with its own model. The real threat has drag, which the filter does not model: NEES reaches 8–9 in the first 15 s (overconfident), then settles near 5. The same mismatch biases the predicted impact point downrange by a median 1.7 km at 80 s to go and 3 m at 10 s ([Methods §7](docs/methods.md#drag-mismatch-in-the-impact-prediction)).
-
-![Average NEES](docs/figures/nees.png)
-
-### Closing the GNC loop: 7-state EKF + Drag PIP + Augmented PN (`configs/advanced.yaml`)
-
-Upgrading the GNC software stack—while keeping the exact same rocket motor, 30 g limit, and 435 m/s kill-vehicle divert budget—solves both the PIP overshoot and the divert-budget exhaustion (`scripts/gnc_trade_study.py` and `scripts/envelope_study.py`):
-
-1. **7-state EKF (`ekf7`) + RK4 Drag PIP (`pip_mode: drag`)**: estimates the threat's quadratic drag coefficient $k_T$ in flight and integrates the ground crossing numerically, eliminating the 1.7 km vacuum PIP bias.
-2. **Polar Range–Azimuth–Elevation radar (`sensor.model: rae`)**: models realistic radial range ($\sigma_r = 10$ m), angle ($\sigma_\theta = 1.2$ mrad) and Doppler range-rate noise, turning the 3D track-uncertainty shell (`E` layer) into a true oriented covariance ellipsoid aligned with the radar line of sight.
-3. **Augmented PN (`guidance_law: apn`) & Optimal ZEM (`zem`)**: feeds the EKF's estimated target drag deceleration into guidance and removes the redundant $+1\,g$ coast bias (since gravity cancels in the free-falling relative frame), cutting median KV divert $\Delta v$ consumption by more than 60 % and rescuing divert-exhaustion misses like **Seed 13** (16.7 m miss $\to$ 1.96 m kinetic hit).
+Sweeping radar noise from 5 m to 100 m shifts the engineering-mode kill rate by only 4.4 points—showing misses are **divert-budget limited**, not sensor-limited. Upgrading software alone (`ekf7` drag estimation + `drag` PIP + `apn`/`zem` guidance) removes the median 1.7 km vacuum PIP overshoot and cuts median KV divert $\Delta v$ usage by over 60%.
 
 ![GNC trade study](docs/figures/gnc_trade_study.png)
 
-![Defensive engagement envelope](docs/figures/engagement_envelope.png)
+![Engineering-mode outcome rates](docs/figures/engineering_outcomes.png)
 
-### Reproduce
+---
+
+## Verification Snapshot
+
+- **Integrator order** (`scripts/convergence_study.py`): Step-halving confirms order **1.00** (Euler) and **4.01** (RK4) on dragged threats, and **0.99** / **4.00** across interceptor booster burnout. With drag off, RK4 matches the closed-form solution to $6 \times 10^{-11}\text{ m}$.
+- **Kalman consistency** (`scripts/filter_consistency.py`): Over 50 seeded runs, 6-DOF NEES/NIS stay inside the 95% $\chi^2$ interval $[5.08, 7.00]$ when matched (mean NEES **6.11**, **94.3%** inside; NIS **5.99**, **95.1%** inside), while `kf6` on a dragged threat drops to **58.9%** NEES coverage—quantifying the drag mismatch solved by `ekf7`.
+
+---
+
+## Quick Start
 
 ```bash
-pip install -e ".[dev,plot]"
-```
+pip install -e ".[dev,plot,workstation]"
 
-```bash
+python -m thaad_sim --config configs/engineering.yaml --seed 13   # Single run -> offline 3D HTML replay
+python -m thaad_sim --serve                                       # Live FastAPI GNC Workstation
+python -m thaad_sim.batch --config configs/engineering.yaml --n 1000
 python -m pytest
 ```
 
-```bash
-python scripts/convergence_study.py
-```
+Full commands, sweep options, and study scripts: **[docs/running.md](docs/running.md)**.
 
-```bash
-python scripts/filter_consistency.py
-```
+---
 
-```bash
-python scripts/drag_mismatch.py
-```
+## Visualization Layers
 
-```bash
-python scripts/gnc_trade_study.py
-```
+Two browser tools sit on top of `thaad_sim/` without altering the physics core (details in **[docs/visualizers.md](docs/visualizers.md)**):
 
-```bash
-python scripts/envelope_study.py
-```
+- **Live Workstation (`--serve`)** — FastAPI server (`server.py`, `telemetry.py`, `workstation/`) running the real Python engine on demand for 3D inspection, optical seeker inset, 14 synchronized GNC/filter plots, 3-law comparisons, and multi-core live Monte Carlo batches.
+- **Offline Replays & Batch Dashboard (`viewer/`)** — Zero-dependency single-file HTML exports (`replays/*.html`, `site/dashboard.html`) and the [GitHub Pages live demo](https://yehiagewily.github.io/THAAD-Simulation/).
 
-```bash
-python scripts/palette_check.py
-```
+![The live workstation playing Seed 13 with EKF7 and Augmented PN](docs/figures/workstation.gif)
 
-The test suite covers seeded determinism, agreement with the legacy scripts' outcomes, the integrators, the 6-state KF and 7-state EKF algebra, analytical Jacobians and NEES/NIS consistency, the RAE polar radar covariance, the PN/APN/ZEM guidance suite, the Wilson interval, byte-identical batch output, the replay and dashboard payloads, the built templates, and the palette checks. `convergence_study.py` writes `convergence.png`, `analytic.png` and `results/convergence.json`. `filter_consistency.py` writes `nees.png`, `nis.png` and `results/consistency.json` (about a minute). `gnc_trade_study.py` and `envelope_study.py` write `gnc_trade_study.png`, `engagement_envelope.png` and `results/gnc_trade_study.json`. `palette_check.py` checks the viewer and dashboard colours for colour-vision deficiency and contrast in both rendering styles. GitHub Actions runs the tests on every push.
+---
 
-## Developing the viewer
-
-The replay viewer and the dashboard are ES modules under `viewer/src/`. Vite builds each into a single self-contained HTML template under `thaad_sim/viewer/`, which the Python package fills with data. The built templates are committed, so running the simulation needs no Node. Rebuild after editing the viewer:
-
-```bash
-cd viewer && npm ci && npm run build
-```
-
-| Module | Contents |
-| --- | --- |
-| `replay/data.js` | Payload parsing, scene-unit conversion, interpolation, GNC/PIP/CPA series, ballistic projection |
-| `replay/sim_engine.js` | Client-side RK4 + KF6/EKF7 + RAE/Cartesian + PN/APN/ZEM simulation engine for the Live Sim Lab (`S`) |
-| `replay/scene.js` | Renderer, main & seeker PiP cameras, sky, terrain, clouds, defended dome, atmospheric strata, 3D labels |
-| `replay/models.js` | Threat (with hypersonic shock cone), interceptor (with directional DACS plume) and spent-booster models |
-| `replay/effects.js` | Trails, radar returns, explosions, LOS lines, 3D GNC vectors, PIP migration & footprint, CPA sphere |
-| `replay/covariance.js` | The 3σ uncertainty ellipsoid (spherical in Cartesian mode, oriented 3D ellipsoid in polar RAE mode) |
-| `replay/director.js` | Camera director for the directed cameras (including CPA endgame framing on misses) |
-| `replay/charts.js`, `replay/analysis.js` | Interactive 3-mode mini-chart (`Elev`, `Plan`, `ZEM`), figure engine, Analysis drawer, Methods tab and CSV export |
-| `replay/ui.js` | HUD, seeker PiP reticle, Live Sim Lab modal, playback controls, keyboard shortcuts, styles |
-| `replay/palette.js` | The colour palette, the single source for the scene, HUD and figures |
-| `dashboard/` | The batch dashboard and its SVG charts |
-
-`npm run dev` serves the sources with live reload, filled with the newest replay in `replays/` and the newest dashboard in `site/`. `node tools/check_views.mjs ../site/replay.html` opens a replay in headless Chrome, screenshots every camera in both styles, and checks every keyboard shortcut. `npm run record-gif` records the animation at the top of this page. CI checks that the committed templates match a fresh build.
-
-The [GitHub Pages site](https://yehiagewily.github.io/THAAD-Simulation/) is built by `.github/workflows/pages.yml` on every push to `main`: four curated replays (baseline hit, baseline divert-exhaustion miss, 7-state EKF+APN rescue, and max-performance demo), the batch dashboard, and the landing page in `docs/site/`.
-
-## Project structure
+## Project Structure
 
 ```text
 .
-├── thaad_sim/                  # The simulation package
-│   ├── __main__.py             # CLI: python -m thaad_sim --config ... --seed ...
-│   ├── config.py               # SimConfig dataclasses, loaded from YAML
-│   ├── dynamics.py             # Ballistic threat and two-stage interceptor (with actuator lag)
-│   ├── integrators.py          # Forward Euler and RK4
-│   ├── estimation.py           # 6-state KF, 7-state drag EKF, RAE radar, drag-integrated PIP
-│   ├── guidance.py             # Classical PN, Augmented PN, Optimal ZEM, g-limit, divert budget
-│   ├── scenario.py             # Random threat scenarios
-│   ├── engagement.py           # Run loop, launch rule, CPA kill check, BDA
-│   ├── batch.py                # python -m thaad_sim.batch: N seeded runs -> CSV
-│   ├── dashboard.py            # python -m thaad_sim.dashboard: batch CSV -> HTML
-│   ├── summary.py, stats.py    # Batch CSV loading, Wilson intervals
-│   ├── consistency.py          # NEES/NIS and impact-prediction bias
-│   ├── verification.py         # Reference problems for the integrator checks
-│   ├── replay_viewer.py        # Packs a run into a replay
-│   └── viewer/                 # Built HTML templates (from viewer/)
-├── viewer/                     # Viewer and dashboard sources, Vite build, browser tools
+├── thaad_sim/                  # Core Python simulation & GNC package
+│   ├── __main__.py             # CLI entry point (--config, --seed, --serve)
+│   ├── config.py               # YAML dataclasses (SimConfig)
+│   ├── dynamics.py             # Ballistic threat & 2-stage interceptor ODEs
+│   ├── integrators.py          # Forward Euler & RK4 (burnout sub-step splitting)
+│   ├── estimation.py           # KF6, 7-state drag EKF7, RAE radar, vacuum/drag PIP
+│   ├── guidance.py             # PN, APN, Optimal ZEM, g-limit, divert Δv budget
+│   ├── scenario.py             # Seeded threat scenario generator
+│   ├── engagement.py           # Closed-loop engagement runner, launch gate, CPA, BDA
+│   ├── batch.py                # Multi-core Monte Carlo & --sweep runner -> CSV
+│   ├── summary.py, stats.py    # Batch aggregation & Wilson confidence intervals
+│   ├── consistency.py          # NEES, NIS & PIP bias diagnostics
+│   ├── verification.py         # Step-halving & closed-form verification problems
+│   ├── telemetry.py            # Vectorized telemetry builder for the workstation
+│   ├── server.py               # FastAPI backend for the Live Workstation
+│   ├── replay_viewer.py        # Self-contained HTML replay packer
+│   ├── dashboard.py            # Self-contained HTML batch dashboard packer
+│   ├── workstation/            # Live workstation frontend (HTML/CSS/ES modules)
+│   └── viewer/                 # Compiled single-file HTML templates
 ├── configs/                    # engineering.yaml, advanced.yaml, demo.yaml
-├── scripts/                    # Studies, trade-off analyses, summaries and the palette check
-├── results/                    # Batch CSVs and study data behind every quoted number
-├── docs/                       # methods.md, figures, the Pages landing page
-├── tests/                      # pytest suite
-└── older_attempts/             # Early scratch experiments, unused by the package
+├── scripts/                    # Verification, GNC trade-off, envelope, & summary scripts
+├── results/                    # Committed 1000-seed CSVs & verification JSONs
+├── docs/                       # methods.md, running.md, visualizers.md, figures/, site/
+├── viewer/                     # Source + Vite bundler for standalone HTML exports
+├── tests/                      # pytest suite (physics, GNC, verification, API, templates)
+└── older_attempts/             # Early prototype scripts (unused by thaad_sim)
 ```
 
-## Limitations
+---
 
-This is a sandbox for building intuition, not a predictive model. The model uses a flat Earth with constant gravity, constant-coefficient drag with no exponential atmosphere or Mach dependence, and point-mass vehicles without 6-DOF attitude dynamics or an explicit IR seeker gimbal. In `configs/engineering.yaml`, the 6-state filter and vacuum impact predictor intentionally ignore the threat's drag so the resulting model mismatch can be measured and compared against `configs/advanced.yaml` (which resolves it with a 7-state EKF, polar RAE radar, and Augmented PN). [Methods §8](docs/methods.md#8-limitations) lists the limitations in full.
+## Limitations & Possible Extensions
 
-## Possible extensions
+Analytical point-mass sandbox: flat Earth with constant gravity, constant quadratic drag coefficient (no exponential atmosphere $\rho(z)$ or Mach $C_D(M)$ table), and no 6-DOF attitude or physical seeker gimbal dynamics ([docs/methods.md §8](docs/methods.md#8-limitations)).
 
-- Multiple simultaneous threats and interceptors (salvo / shoot-look-shoot fire control).
-- Exponential or US Standard Atmosphere air density $\rho(z)$ and Mach-dependent drag curves $C_D(M)$.
-- 6-DOF rigid-body attitude dynamics and IR seeker strapdown/gimbal tracking in the terminal phase.
+**Possible extensions:** multi-target salvos (shoot-look-shoot fire control), US Standard Atmosphere $\rho(z)$ and Mach drag curves $C_D(M)$, and 6-DOF rigid-body dynamics with strapdown/gimballed terminal IR seeker tracking.
