@@ -6,6 +6,7 @@ type: software
 version: 1.0.0
 date-released: 2026-11-14
 license: MIT
+doi: 10.5281/zenodo.24208792
 repository-code: "https://github.com/YehiaGewily/THAAD-Simulation"
 authors:
   - family-names: Gewily
