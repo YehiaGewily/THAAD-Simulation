@@ -1,28 +1,28 @@
 {
   "base": {
     "label": "Baseline (KF6 + Vacuum PIP + PN)",
-    "runs": 40,
-    "engaged": 40,
-    "kills": 24,
-    "kill_rate": 60.0,
+    "runs": 1000,
+    "engaged": 960,
+    "kills": 575,
+    "kill_rate": 59.9,
     "ci95": [
-      44.6,
-      73.65
+      56.76,
+      62.95
     ],
     "median_dv_mps": 435.0,
-    "mean_dv_mps": 429.6
+    "mean_dv_mps": 429.3
   },
   "adv": {
     "label": "Advanced (EKF7 + Drag PIP + APN)",
-    "runs": 40,
-    "engaged": 35,
-    "kills": 35,
+    "runs": 1000,
+    "engaged": 848,
+    "kills": 848,
     "kill_rate": 100.0,
     "ci95": [
-      90.11,
+      99.55,
       100.0
     ],
-    "median_dv_mps": 126.4,
-    "mean_dv_mps": 137.7
+    "median_dv_mps": 132.3,
+    "mean_dv_mps": 140.5
   }
 }
