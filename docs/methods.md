@@ -222,9 +222,78 @@ The baseline 6-state filter and vacuum PIP ignore drag, while the threat has it.
 - **PIP accuracy**: Integrating the ground crossing with the EKF's estimated drag $\hat k_T$ eliminates the 1.7 km early downrange bias of the vacuum predictor.
 - **Divert $\Delta v$ efficiency & battlespace expansion**: By compensating for estimated target drag deceleration in midcourse and eliminating the continuous $+1\,g$ coast bias (since gravity cancels identically between free-falling bodies), Augmented PN slashes kill-vehicle divert $\Delta v$ consumption by more than half and expands the lethal battlespace across high-range, high-altitude threats (rescuing divert-limited misses such as Seed 13 from a 16.7 m miss to a 1.96 m hit using only 136.8 m/s of divert $\Delta v$).
 
+The upgrade changes four things at once, so the ablation below attributes the gain to each one.
+
 ![GNC trade study](figures/gnc_trade_study.png)
 
 ![Defensive engagement envelope](figures/engagement_envelope.png)
+
+### Component ablation (1000 paired seeds)
+
+`scripts/ablation_study.py` runs nine configurations on seeds 0–999 with the identical interceptor and threats, so each seed is a matched pair across configurations. A test (`tests/test_ablation.py`) checks that its fast engagement loop reproduces `thaad_sim.batch.run_metrics`.
+
+**Metrics.** A scenario is *threatening* when the unintercepted threat would land inside the 30 km defended radius (845 of 1000). The **protection rate** is the share of threatening scenarios that end in a kill; its denominator is the same for every configuration. The kill rate among engaged threats is not comparable across configurations, because each one makes its own PIP-gated launch decisions (the baseline engages 960 threats, the drag-PIP configurations about 850). A **false engagement** is a launch at a threat that would have landed outside the defended area (of 155). Differences in protection are tested with the exact two-sided McNemar test on the discordant pairs ($b$ = seeds only the reference kills, $c$ = seeds only the comparison kills). Differences in divert use are the median per-seed paired difference over seeds both configurations engaged, with a 4000-resample percentile bootstrap 95 % interval.
+
+| Configuration (filter + PIP + guidance, radar) | Protection (95 % CI) | Median divert $\Delta v$ | False engagements |
+| --- | --- | --- | --- |
+| C1 KF6 + vacuum + PN, Cartesian (baseline) | 56.8 % (53.4–60.1) | 435 m/s | 115 |
+| C2 KF6 + vacuum + PN, RAE | 56.3 % (53.0–59.6) | 435 m/s | 115 |
+| C3 EKF7 + vacuum + PN | 58.0 % (54.6–61.3) | 435 m/s | 113 |
+| C4 EKF7 + drag + PN | 57.8 % (54.4–61.0) | 435 m/s | 5 |
+| C5 KF6 + vacuum + APN ($\hat{\mathbf a}_T = 0$: PN without coast gravity term) | 100 % (99.5–100) | 271 m/s | 115 |
+| C6 EKF7 + vacuum + APN | 100 % (99.5–100) | 132 m/s | 113 |
+| C7 EKF7 + drag + APN | 100 % (99.5–100) | 132 m/s | 5 |
+| C8 EKF7 + drag + ZEM | 100 % (99.5–100) | 130 m/s | 5 |
+| C9 EKF7 + drag + APN, RAE (`advanced.yaml`) | 100 % (99.5–100) | 132 m/s | 3 |
+
+| One-factor change | Protection change ($b$ / $c$, McNemar $p$) | Paired divert change, median [95 % CI] | False engagements |
+| --- | --- | --- | --- |
+| Cartesian → RAE radar (C1 → C2) | −0.5 pt (14 / 10, $p$ = 0.54) | 0 m/s | 115 → 115 |
+| KF6 → EKF7 (C1 → C3) | +1.2 pt (1 / 11, $p$ = 0.006) | 0 m/s | 115 → 113 |
+| vacuum → drag PIP, PN (C3 → C4) | −0.2 pt (2 / 0, $p$ = 0.50) | 0 m/s | 113 → 5 |
+| **PN → PN without coast gravity term (C1 → C5)** | **+43.2 pt (0 / 365, $p < 10^{-100}$)** | **−158 [−163, −154] m/s** | 115 → 115 |
+| add EKF7 drag feed-forward (C5 → C6) | 0 (0 / 0) | −137 [−141, −134] m/s | 115 → 113 |
+| vacuum → drag PIP, APN (C6 → C7) | 0 (0 / 0) | 0 m/s | 113 → 5 |
+| APN → ZEM (C7 → C8) | 0 (0 / 0) | −2.8 [−3.6, −2.1] m/s | 5 → 5 |
+| Cartesian → RAE radar, full stack (C7 → C9) | 0 (0 / 0) | +0.4 [−0.0, +0.9] m/s | 5 → 3 |
+
+**Reading.** Every baseline miss is a divert-exhausted miss, and the one-factor change that recovers them is in the guidance law. Classical PN commands $+g\hat{\mathbf z}$ for the whole flight (§4). During the kill vehicle's coast both bodies fall freely, so gravity cancels in the relative motion and the term pushes the kill vehicle off the collision course. PN's LOS-rate term then partly works against it, so the net cost is below $g$ per second: on the 575 seeds where both C1 and C5 kill, C1 spends a median 183 m/s more divert, about 3.6 m/s per second of coast. Dropping the term after burnout (C5) recovers all 365 lost kills without any change to the filter or the PIP. Putting drag into the filter without changing the guidance barely helps (C3 58.0 %, C4 57.8 %), because PN does not use the estimated target acceleration. The drag-aware estimator instead has two separate effects that do not show up as kills at the nominal budget: drag feed-forward halves divert use (margin), and the drag-integrated PIP almost removes launches at threats that will land outside the defended area (interceptor economy). The RAE radar and ZEM change neither beyond noise. Because every C5–C9 configuration protects all 845 threatening threats at 435 m/s, the sweeps below change the divert budget and the threat drag to separate them.
+
+![GNC ablation](figures/ablation_study.png)
+
+### Sensitivity to divert budget and threat drag (1000 paired seeds per point)
+
+`scripts/sensitivity_study.py` reruns four of the ablation configurations on seeds 0–999: C1 (baseline), C5 (PN without the coast gravity term), C7 (EKF7 + drag PIP + APN) and C9 (`advanced.yaml`). It changes one parameter at a time: the kill-vehicle divert budget at the nominal threat drag, and the true threat drag $k_T$ at the nominal 435 m/s budget. The filters are not retuned, so KF6 still assumes no drag and the EKF7 keeps its prior $\hat k_T = (3.5 \pm 2.5) \times 10^{-5}\ \mathrm{m^{-1}}$. The threatening set is recomputed for each drag value, because drag changes where the unintercepted threat lands. Metrics and tests are as in the ablation.
+
+**Divert budget** (nominal drag, 845 threatening):
+
+| Budget [m/s] | 100 | 150 | 200 | 250 | 300 | 350 | 435 | 550 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| C1 baseline | 0 % | 0 % | 0 % | 0 % | 1.2 % | 13.2 % | 56.8 % | 99.0 % |
+| C5 PN without coast $+g$ | 0 % | 9.8 % | 38.8 % | 66.5 % | 85.9 % | 97.4 % | 100 % | 100 % |
+| C7 EKF7 + drag PIP + APN | 68.3 % | 93.1 % | 99.6 % | 100 % | 100 % | 100 % | 100 % | 100 % |
+| C9 `advanced.yaml` (RAE) | 68.8 % | 93.0 % | 99.6 % | 100 % | 100 % | 100 % | 100 % | 100 % |
+
+The smallest tested budget that protects at least 99 % of threatening threats is 550 m/s for the baseline, 435 m/s without the coast gravity term and 200 m/s with the drag feed-forward. Below the nominal budget the feed-forward's margin turns into kills: at 200 m/s, C5 → C7 rescues 514 seeds and loses none (+60.8 pt, $p < 10^{-100}$), and at 150 m/s it rescues 704 (+83.3 pt). The radar model makes no significant difference at any budget (C7 → C9, largest discordance 4 / 8 at 100 m/s, $p$ = 0.39).
+
+**Threat drag** (435 m/s budget):
+
+| True $k_T$ [$10^{-5}\ \mathrm{m^{-1}}$] | Threatening | Protection C1 / C5 / C7 / C9 | Median divert $\Delta v$ C1 / C5 / C7 | False engagements: vacuum PIP (C1 = C5) / C7 / C9 |
+| --- | --- | --- | --- | --- |
+| 0 | 827 | 100 / 100 / 100 / 100 % | 390 / 144 / 127 m/s | 7 / 36 / 28 of 173 |
+| 1 | 940 | 94.7 / 100 / 100 / 99.8 % | 428 / 195 / 110 m/s | 14 / 4 / 2 of 60 |
+| 2 | 925 | 76.1 / 100 / 100 / 99.9 % | 435 / 229 / 110 m/s | 35 / 6 / 5 of 75 |
+| **4 (nominal)** | 845 | 56.8 / 100 / 100 / 100 % | 435 / 271 / 132 m/s | 115 / 5 / 3 of 155 |
+| 6 | 669 | 50.7 / 100 / 100 / 100 % | 435 / 302 / 164 m/s | 288 / 22 / 15 of 331 |
+| 8 | 490 | 47.4 / 100 / 99.6 / 99.2 % | 435 / 326 / 206 m/s | 465 / 15 / 13 of 510 |
+
+**Reading.**
+
+- **The baseline's misses need two things at once.** Against a drag-free threat the baseline protects all 827 threatening threats at a median 390 m/s, and protection falls to 47 % as drag grows. Without the coast gravity term it stays at 100 % over the whole range, even though KF6 and the vacuum PIP know nothing about drag. Unmodelled drag costs divert by itself (C5 rises from 144 to 326 m/s). The gravity term adds a paired median of 244 m/s at $k_T = 0$ and 183 m/s at the nominal drag (seeds where both kill), and that pushes the total over the budget.
+- **Feed-forward margin.** C7 spends a paired median of 92–135 m/s less than C5 for every $k_T \ge 2 \times 10^{-5}$, but only 18 m/s against a drag-free threat, where there is nothing to feed forward.
+- **Launch economy.** The vacuum PIP's false engagements grow with drag, from 4 % of non-threatening threats at $k_T = 0$ to 91 % at $8 \times 10^{-5}$, because a dragged threat falls short of the vacuum prediction. The drag PIP holds them to 3–8 % at every nonzero drag. Against a drag-free threat it does worse than the vacuum PIP (36 vs. 7 of 173, $p < 10^{-8}$). The launch decision comes after 5 s of tracking, while the drag estimate is still near its $3.5 \times 10^{-5}$ prior (the final estimates converge to within $10^{-6}$ of the truth), so the predictor expects some drag-free threats to fall short into the defended area when they actually fly over it. The RAE radar removes a few of these (28 vs. 36, $p$ = 0.008).
+
+![Sensitivity study](figures/sensitivity_study.png)
 
 ### Batch statistics
 

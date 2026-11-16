@@ -64,3 +64,22 @@ def test_wilson_differs_from_wald_where_wald_fails():
 def test_wilson_rejects_invalid_counts(k, n):
     with pytest.raises(ValueError):
         wilson_interval(k, n)
+
+
+def test_mcnemar_exact_matches_binomial_reference():
+    from math import comb
+    from thaad_sim.stats import mcnemar_exact
+    # b=2, c=8: p = 2 * P(X <= 2), X ~ Bin(10, 1/2) = 2 * 56/1024
+    assert mcnemar_exact(2, 8) == pytest.approx(2 * sum(comb(10, i) for i in range(3)) / 1024)
+    assert mcnemar_exact(8, 2) == mcnemar_exact(2, 8)
+    assert mcnemar_exact(5, 5) == 1.0
+    assert mcnemar_exact(0, 0) == 1.0
+
+
+def test_mcnemar_exact_handles_large_counts():
+    from thaad_sim.stats import mcnemar_exact
+    p = mcnemar_exact(0, 365)
+    assert 0.0 < p < 1e-100
+    assert mcnemar_exact(400, 420) == pytest.approx(mcnemar_exact(420, 400))
+    with pytest.raises(ValueError):
+        mcnemar_exact(-1, 3)

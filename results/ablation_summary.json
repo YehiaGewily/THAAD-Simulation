@@ -2,6 +2,7 @@
   "runs_per_config": 1000,
   "threatening_scenarios": 845,
   "non_threatening_scenarios": 155,
+  "metric_note": "kill_rate_threatening (protection rate) shares one denominator across configs; kill_rate_engaged does not, because each config makes its own launch decisions",
   "configs": [
     {
       "config_id": "C1_base_cart",
@@ -362,6 +363,206 @@
       "median_miss_distance_m": 0.0,
       "median_kf_rms_pos_m": 6.12,
       "median_kf_rms_vel_mps": 1.76
+    }
+  ],
+  "contrasts": [
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C2_base_rae",
+      "change": "Cartesian -> RAE radar (KF6, vacuum PIP, PN)",
+      "threatening": 845,
+      "protection_ref_pct": 56.8,
+      "protection_cmp_pct": 56.33,
+      "protection_diff_pts": -0.47,
+      "discordant_only_ref": 14,
+      "discordant_only_cmp": 10,
+      "mcnemar_p": 0.5412561893463139,
+      "non_threatening": 155,
+      "false_engage_ref": 115,
+      "false_engage_cmp": 115,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 959,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C3_ekf7_vac_pn",
+      "change": "KF6 -> EKF7 filter (vacuum PIP, PN)",
+      "threatening": 845,
+      "protection_ref_pct": 56.8,
+      "protection_cmp_pct": 57.99,
+      "protection_diff_pts": 1.18,
+      "discordant_only_ref": 1,
+      "discordant_only_cmp": 11,
+      "mcnemar_p": 0.006347656249999991,
+      "non_threatening": 155,
+      "false_engage_ref": 115,
+      "false_engage_cmp": 113,
+      "false_engage_mcnemar_p": 0.5,
+      "paired_engaged": 958,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "ref": "C3_ekf7_vac_pn",
+      "cmp": "C4_ekf7_drag_pn",
+      "change": "vacuum -> drag PIP (EKF7, PN)",
+      "threatening": 845,
+      "protection_ref_pct": 57.99,
+      "protection_cmp_pct": 57.75,
+      "protection_diff_pts": -0.24,
+      "discordant_only_ref": 2,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 0.5,
+      "non_threatening": 155,
+      "false_engage_ref": 113,
+      "false_engage_cmp": 5,
+      "false_engage_mcnemar_p": 6.1629758220391404e-33,
+      "paired_engaged": 850,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C5_kf6_vac_apn",
+      "change": "PN -> free-fall PN, no coast gravity comp (KF6)",
+      "threatening": 845,
+      "protection_ref_pct": 56.8,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 43.2,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 365,
+      "mcnemar_p": 2.661224900005099e-110,
+      "non_threatening": 155,
+      "false_engage_ref": 115,
+      "false_engage_cmp": 115,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 960,
+      "median_dv_diff_mps": -157.8,
+      "median_dv_diff_ci95": [
+        -163.1,
+        -153.6
+      ]
+    },
+    {
+      "ref": "C5_kf6_vac_apn",
+      "cmp": "C6_ekf7_vac_apn",
+      "change": "KF6 -> EKF7 + drag feed-forward (vac PIP, APN)",
+      "threatening": 845,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 155,
+      "false_engage_ref": 115,
+      "false_engage_cmp": 113,
+      "false_engage_mcnemar_p": 0.5,
+      "paired_engaged": 958,
+      "median_dv_diff_mps": -137.1,
+      "median_dv_diff_ci95": [
+        -140.6,
+        -133.8
+      ]
+    },
+    {
+      "ref": "C6_ekf7_vac_apn",
+      "cmp": "C7_ekf7_drag_apn",
+      "change": "vacuum -> drag PIP (EKF7, APN)",
+      "threatening": 845,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 155,
+      "false_engage_ref": 113,
+      "false_engage_cmp": 5,
+      "false_engage_mcnemar_p": 6.1629758220391404e-33,
+      "paired_engaged": 850,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "ref": "C7_ekf7_drag_apn",
+      "cmp": "C8_ekf7_drag_zem",
+      "change": "APN -> ZEM (EKF7, drag PIP)",
+      "threatening": 845,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 155,
+      "false_engage_ref": 5,
+      "false_engage_cmp": 5,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 850,
+      "median_dv_diff_mps": -2.8,
+      "median_dv_diff_ci95": [
+        -3.6,
+        -2.1
+      ]
+    },
+    {
+      "ref": "C7_ekf7_drag_apn",
+      "cmp": "C9_adv_rae",
+      "change": "Cartesian -> RAE radar (full advanced stack)",
+      "threatening": 845,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 155,
+      "false_engage_ref": 5,
+      "false_engage_cmp": 3,
+      "false_engage_mcnemar_p": 0.5,
+      "paired_engaged": 848,
+      "median_dv_diff_mps": 0.4,
+      "median_dv_diff_ci95": [
+        -0.0,
+        0.9
+      ]
+    },
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C9_adv_rae",
+      "change": "baseline -> full advanced stack",
+      "threatening": 845,
+      "protection_ref_pct": 56.8,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 43.2,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 365,
+      "mcnemar_p": 2.661224900005099e-110,
+      "non_threatening": 155,
+      "false_engage_ref": 115,
+      "false_engage_cmp": 3,
+      "false_engage_mcnemar_p": 3.851859888774489e-34,
+      "paired_engaged": 848,
+      "median_dv_diff_mps": -297.3,
+      "median_dv_diff_ci95": [
+        -299.0,
+        -294.3
+      ]
     }
   ]
 }

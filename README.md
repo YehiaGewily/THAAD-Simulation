@@ -40,11 +40,24 @@ All scenarios run the exact same simulation code; only YAML settings change (`co
 
 | Mode | Radar, Filter & Guidance | Interceptor Limits | Outcome Highlight |
 | --- | --- | --- | --- |
-| [`configs/engineering.yaml`](configs/engineering.yaml) | Cartesian radar, `kf6`, vacuum PIP, classical `pn` | 150 kN (5 s), 30 g, 435 m/s divert budget, 10 m $R_k$ | **59.9%** kill of engaged (575 / 960, 95% CI 56.8–63.0%); all 385 misses exhaust divert $\Delta v$ |
-| [`configs/advanced.yaml`](configs/advanced.yaml) | Polar `rae` radar, `ekf7`, drag PIP, `apn` | Identical 150 kN (5 s), 30 g, 435 m/s divert, 10 m $R_k$ | Rescues divert-limited misses (e.g. **Seed 13**: 16.7 m miss $\to$ **1.96 m hit**, ~69% less $\Delta v$) |
+| [`configs/engineering.yaml`](configs/engineering.yaml) | Cartesian radar, `kf6`, vacuum PIP, classical `pn` | 150 kN (5 s), 30 g, 435 m/s divert budget, 10 m $R_k$ | **56.8%** of threatening threats killed (480 / 845, 95% CI 53.4–60.1%); all 385 misses exhaust divert $\Delta v$ |
+| [`configs/advanced.yaml`](configs/advanced.yaml) | Polar `rae` radar, `ekf7`, drag PIP, `apn` | Identical 150 kN (5 s), 30 g, 435 m/s divert, 10 m $R_k$ | **100%** of threatening threats killed (845 / 845, 95% CI 99.5–100%) at a median 132 m/s divert $\Delta v$ |
 | [`configs/demo.yaml`](configs/demo.yaml) | Cartesian radar, `kf6`, vacuum PIP, classical `pn` | 220 kN (8 s), 50 g, unlimited divert, 30 m $R_k$ | **100%** (1000 / 1000, 95% CI 99.6–100%) |
 
-Sweeping radar noise from 5 m to 100 m shifts the engineering-mode kill rate by only 4.4 points—showing misses are **divert-budget limited**, not sensor-limited. Upgrading software alone (`ekf7` drag estimation + `drag` PIP + `apn`/`zem` guidance) removes the median 1.7 km vacuum PIP overshoot and cuts median KV divert $\Delta v$ usage by over 60%.
+"Threatening" means the unintercepted threat would land inside the 30 km defended radius (845 of seeds 0–999). This denominator is the same for every configuration, unlike the kill rate among engaged threats, which depends on each configuration's own launch decisions.
+
+**What limits the baseline: a 1000-seed paired ablation** ([`scripts/ablation_study.py`](scripts/ablation_study.py)). Changing one GNC component at a time on the same seeds shows that one guidance term recovers every lost kill. Classical PN commands $+g$ throughout the kill vehicle's coast, although gravity cancels between two free-falling bodies, so the term pushes the vehicle off course and then spends divert $\Delta v$ correcting it. Removing that term alone (KF6 and vacuum PIP unchanged) raises protection from 56.8% to 100% (365 seeds rescued, none lost; exact McNemar $p < 10^{-100}$) and cuts median divert use from 435 to 271 m/s. Adding drag to the filter without changing the guidance barely helps (58%). The drag-aware software then does two different jobs:
+
+- **EKF7 drag feed-forward** halves divert use again (271 → 132 m/s median).
+- **The drag-integrated PIP** cuts launches at threats that would have landed outside the defended area from 115 to 5 (of 155).
+
+The RAE radar and ZEM vs. APN change neither outcome measurably, and sweeping radar noise from 5 m to 100 m moves the baseline by only 4.4 points.
+
+![GNC ablation](docs/figures/ablation_study.png)
+
+**Sensitivity sweeps** ([`scripts/sensitivity_study.py`](scripts/sensitivity_study.py), 56,000 more paired runs). The baseline's misses need two things at once: the coast gravity term and threat drag that the filter does not model. Against a drag-free threat the baseline also protects 100%, and without the gravity term protection stays at 100% for every threat drag tested (0 to 8 × 10⁻⁵ 1/m). The feed-forward's margin turns into kills when the budget is tight. The smallest tested budget for ≥ 99% protection is 550 m/s for the baseline, 435 m/s without the gravity term, and 200 m/s with EKF7 drag feed-forward. One cost also showed up: against a drag-free threat the drag PIP launches at more threats that will land outside the defended area (36 vs. 7 of 173), because it decides after 5 s of tracking while its drag estimate is still near the prior. Details in [docs/methods.md](docs/methods.md#sensitivity-to-divert-budget-and-threat-drag-1000-paired-seeds-per-point).
+
+![Sensitivity study](docs/figures/sensitivity_study.png)
 
 ![GNC trade study](docs/figures/gnc_trade_study.png)
 

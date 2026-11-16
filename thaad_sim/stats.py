@@ -24,3 +24,26 @@ def wilson_interval(k, n, z=Z95):
     low = 0.0 if k == 0 else max(0.0, centre - half)
     high = 1.0 if k == n else min(1.0, centre + half)
     return low, high
+
+
+def mcnemar_exact(b, c):
+    """Exact two-sided McNemar test for paired binary outcomes.
+
+    ``b`` and ``c`` are the discordant counts: pairs where only the first
+    configuration succeeds, and pairs where only the second does. Under the null
+    hypothesis of equal success rates, b ~ Binomial(b + c, 1/2), so the p-value
+    is twice the smaller binomial tail, capped at 1. Sums run in log space so
+    large counts do not overflow. Returns 1.0 when there are no discordant pairs.
+    """
+    if b < 0 or c < 0:
+        raise ValueError(f"discordant counts must be non-negative, got b={b}, c={c}")
+    n = b + c
+    if n == 0:
+        return 1.0
+    k = min(b, c)
+    log_half_n = n * math.log(0.5)
+    log_terms = [math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1) + log_half_n
+                 for i in range(k + 1)]
+    top = max(log_terms)
+    tail = math.exp(top) * sum(math.exp(t - top) for t in log_terms)
+    return min(1.0, 2.0 * tail)

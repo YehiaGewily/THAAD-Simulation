@@ -22,8 +22,9 @@ def apn_command(r, v, pn_gain, g, target_accel=None, boost=False):
     In free-fall coast between two bodies in uniform gravity, gravity cancels
     identically in the relative acceleration (r_ddot = a_{T,drag} - a_{I,drag} - a_divert).
     Adding +g only during boost pitches the booster loft trajectory while sparing
-    the kill vehicle from burning 9.81 m/s of divert delta-v every second fighting
-    free fall during midcourse coast.
+    the kill vehicle from commanding a +g it does not need during midcourse coast
+    (up to 9.81 m/s of divert delta-v per second; PN's LOS-rate term partly
+    cancels it, so the measured cost is lower, see scripts/sensitivity_study.py).
     """
     r_mag = np.linalg.norm(r)
     if r_mag < PN_MIN_RANGE:

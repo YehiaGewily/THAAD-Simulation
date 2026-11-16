@@ -10,7 +10,15 @@
       62.95
     ],
     "median_dv_mps": 435.0,
-    "mean_dv_mps": 429.3
+    "mean_dv_mps": 429.3,
+    "threatening": 845,
+    "protected": 480,
+    "protection_rate": 56.8,
+    "ci95_protection": [
+      53.44,
+      60.11
+    ],
+    "false_engages": 115
   },
   "adv": {
     "label": "Advanced (EKF7 + Drag PIP + APN)",
@@ -23,6 +31,14 @@
       100.0
     ],
     "median_dv_mps": 132.3,
-    "mean_dv_mps": 140.5
+    "mean_dv_mps": 140.5,
+    "threatening": 845,
+    "protected": 845,
+    "protection_rate": 100.0,
+    "ci95_protection": [
+      99.55,
+      100.0
+    ],
+    "false_engages": 3
   }
 }
