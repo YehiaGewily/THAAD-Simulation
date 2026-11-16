@@ -8,18 +8,20 @@ from __future__ import annotations
 
 import numpy as np
 
+from .atmosphere import density_ratio
 from .estimation import predict_impact_drag
 from .guidance import G0, PN_MIN_RANGE, guidance_command, limit_g
 from .replay_viewer import build_payload
 
 
-def _integrate_true_impact(pos0, vel0, drag, g, dt=0.05, max_steps=4000):
+def _integrate_true_impact(pos0, vel0, drag, g, dt=0.05, max_steps=4000, scale_height=None):
     """Integrate the threat's final state to z = 0 under quadratic drag using RK4."""
     x, y, z = float(pos0[0]), float(pos0[1]), float(pos0[2])
     vx, vy, vz = float(vel0[0]), float(vel0[1]), float(vel0[2])
     if z <= 0.0:
         return [round(x, 1), round(y, 1), 0.0]
-    pip, _ = predict_impact_drag(np.array([x, y, z]), np.array([vx, vy, vz]), drag, g, dt_step=0.25, max_steps=max_steps)
+    pip, _ = predict_impact_drag(np.array([x, y, z]), np.array([vx, vy, vz]), drag, g, dt_step=0.25, max_steps=max_steps,
+                                 scale_height=scale_height)
     if pip is not None:
         return [round(float(pip[0]), 1), round(float(pip[1]), 1), 0.0]
     return [round(x, 1), round(y, 1), 0.0]
@@ -43,6 +45,7 @@ def build_workstation_telemetry(hist):
     dt_sim = float(prm.get("dt", 0.02))
     g_acc = float(prm.get("g", 9.81))
     threat_drag = float(prm.get("threat_drag", 0.00004))
+    scale_height = prm.get("scale_height")   # None = constant-density atmosphere
     pn_gain = float(prm.get("pn_gain", 4.0))
     max_g = float(base.get("maxG", prm.get("max_g", 30.0)))
     divert_budget = prm.get("kv_divert_dv")
@@ -85,7 +88,8 @@ def build_workstation_telemetry(hist):
     impact_t = float(t[-1]) if base["outcome"] in ("GROUND", "NO ENGAGE") else None
     end_event_t = kill_t if kill_t is not None else impact_t
 
-    true_impact = _integrate_true_impact(t_pos[-1], t_vel[-1], threat_drag, g_acc)
+    true_impact = _integrate_true_impact(t_pos[-1], t_vel[-1], threat_drag, g_acc,
+                                         scale_height=scale_height)
 
     # Time-series arrays
     alt_t = t_pos[:, 2] / 1000.0
@@ -156,6 +160,7 @@ def build_workstation_telemetry(hist):
                             np.array([epvx, epvy, epvz]),
                             kd,
                             g_acc,
+                            scale_height=scale_height,
                         )
                         if d_pip is not None:
                             cached_drag_pip = (float(d_pip[0]), float(d_pip[1]))
@@ -232,7 +237,8 @@ def build_workstation_telemetry(hist):
 
             if er_mag >= PN_MIN_RANGE:
                 ep_vel = np.array([epvx, epvy, epvz])
-                est_t_acc = -float(est_drag_arr[i]) * float(np.linalg.norm(ep_vel)) * ep_vel
+                est_k = float(est_drag_arr[i]) * density_ratio(epz, scale_height)
+                est_t_acc = -est_k * float(np.linalg.norm(ep_vel)) * ep_vel
                 raw_cmd = guidance_command(
                     guidance_law, er_vec, ev_vec, pn_gain, g_acc,
                     target_accel=est_t_acc if base.get("filterType") == "ekf7" else None,

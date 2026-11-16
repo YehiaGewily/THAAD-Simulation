@@ -63,7 +63,8 @@ def run(cfg, rng, console=None):
         f"[dim]Scenario: {sc.altitude/1000:.1f} km alt, {sc.range/1000:.1f} km range, "
         f"aim {sc.aim_radius/1000:.1f} km from origin, T_imp~{sc.impact_time:.1f} s[/dim]"
     )
-    interceptor = Interceptor([0, 0, 0], cfg.interceptor, g, cfg.sim.integrator)
+    interceptor = Interceptor([0, 0, 0], cfg.interceptor, g, cfg.sim.integrator,
+                              scale_height=cfg.sim.density_scale_height)
     kf = make_filter(cfg)
 
     t_max = max(cfg.sim.t_max, sc.impact_time * 2.0 + 30.0)

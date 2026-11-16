@@ -1,0 +1,570 @@
+{
+  "atmosphere": "exponential",
+  "scale_height_m": 7000.0,
+  "runs_per_config": 1000,
+  "threatening_scenarios": 830,
+  "non_threatening_scenarios": 170,
+  "metric_note": "kill_rate_threatening (protection rate) shares one denominator across configs; kill_rate_engaged does not, because each config makes its own launch decisions",
+  "configs": [
+    {
+      "config_id": "C1_base_cart",
+      "short_label": "C1: KF6 + Vac + PN (Cartesian, Baseline)",
+      "label": "C1: KF6 + Vacuum PIP + PN (Cartesian, Baseline)",
+      "filter_type": "kf6",
+      "pip_mode": "vacuum",
+      "guidance_law": "pn",
+      "sensor_model": "cartesian",
+      "runs": 1000,
+      "engaged": 834,
+      "kills": 834,
+      "misses": 0,
+      "no_engage": 166,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 100.0,
+      "ci95_engaged": [
+        99.54,
+        100.0
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 830,
+      "kill_rate_threatening": 100.0,
+      "ci95_threatening": [
+        99.54,
+        100.0
+      ],
+      "false_engages": 4,
+      "false_holds": 0,
+      "misses_dv_exhausted": 0,
+      "median_dv_mps": 390.1,
+      "iqr_dv_mps": [
+        362.5,
+        415.1
+      ],
+      "mean_dv_mps": 387.8,
+      "median_cpa_engaged_m": 2.84,
+      "median_miss_distance_m": 0.0,
+      "median_kf_rms_pos_m": 3.88,
+      "median_kf_rms_vel_mps": 3.09
+    },
+    {
+      "config_id": "C2_base_rae",
+      "short_label": "C2: KF6 + Vac + PN (RAE Polar Radar)",
+      "label": "C2: KF6 + Vacuum PIP + PN (RAE Polar Radar)",
+      "filter_type": "kf6",
+      "pip_mode": "vacuum",
+      "guidance_law": "pn",
+      "sensor_model": "rae",
+      "runs": 1000,
+      "engaged": 836,
+      "kills": 834,
+      "misses": 2,
+      "no_engage": 164,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 99.76,
+      "ci95_engaged": [
+        99.13,
+        99.93
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 828,
+      "kill_rate_threatening": 99.76,
+      "ci95_threatening": [
+        99.13,
+        99.93
+      ],
+      "false_engages": 6,
+      "false_holds": 0,
+      "misses_dv_exhausted": 2,
+      "median_dv_mps": 389.3,
+      "iqr_dv_mps": [
+        363.2,
+        414.8
+      ],
+      "mean_dv_mps": 388.2,
+      "median_cpa_engaged_m": 3.43,
+      "median_miss_distance_m": 10.35,
+      "median_kf_rms_pos_m": 6.56,
+      "median_kf_rms_vel_mps": 2.75
+    },
+    {
+      "config_id": "C3_ekf7_vac_pn",
+      "short_label": "C3: EKF7 + Vac + PN (Filter Only)",
+      "label": "C3: EKF7 + Vacuum PIP + PN (Cartesian)",
+      "filter_type": "ekf7",
+      "pip_mode": "vacuum",
+      "guidance_law": "pn",
+      "sensor_model": "cartesian",
+      "runs": 1000,
+      "engaged": 831,
+      "kills": 830,
+      "misses": 1,
+      "no_engage": 169,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 99.88,
+      "ci95_engaged": [
+        99.32,
+        99.98
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 829,
+      "kill_rate_threatening": 99.88,
+      "ci95_threatening": [
+        99.32,
+        99.98
+      ],
+      "false_engages": 1,
+      "false_holds": 0,
+      "misses_dv_exhausted": 1,
+      "median_dv_mps": 382.3,
+      "iqr_dv_mps": [
+        354.6,
+        406.3
+      ],
+      "mean_dv_mps": 380.3,
+      "median_cpa_engaged_m": 2.79,
+      "median_miss_distance_m": 20237.09,
+      "median_kf_rms_pos_m": 3.85,
+      "median_kf_rms_vel_mps": 1.99
+    },
+    {
+      "config_id": "C4_ekf7_drag_pn",
+      "short_label": "C4: EKF7 + Drag + PN (Filter + Drag PIP)",
+      "label": "C4: EKF7 + Drag PIP + PN (Cartesian)",
+      "filter_type": "ekf7",
+      "pip_mode": "drag",
+      "guidance_law": "pn",
+      "sensor_model": "cartesian",
+      "runs": 1000,
+      "engaged": 832,
+      "kills": 832,
+      "misses": 0,
+      "no_engage": 168,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 100.0,
+      "ci95_engaged": [
+        99.54,
+        100.0
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 830,
+      "kill_rate_threatening": 100.0,
+      "ci95_threatening": [
+        99.54,
+        100.0
+      ],
+      "false_engages": 2,
+      "false_holds": 0,
+      "misses_dv_exhausted": 0,
+      "median_dv_mps": 382.1,
+      "iqr_dv_mps": [
+        354.6,
+        406.3
+      ],
+      "mean_dv_mps": 380.1,
+      "median_cpa_engaged_m": 2.77,
+      "median_miss_distance_m": 0.0,
+      "median_kf_rms_pos_m": 3.85,
+      "median_kf_rms_vel_mps": 1.99
+    },
+    {
+      "config_id": "C5_kf6_vac_apn",
+      "short_label": "C5: KF6 + Vac + APN (Free-Fall PN, a_T=0)",
+      "label": "C5: KF6 + Vacuum PIP + APN (Cartesian, a_T=0)",
+      "filter_type": "kf6",
+      "pip_mode": "vacuum",
+      "guidance_law": "apn",
+      "sensor_model": "cartesian",
+      "runs": 1000,
+      "engaged": 834,
+      "kills": 834,
+      "misses": 0,
+      "no_engage": 166,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 100.0,
+      "ci95_engaged": [
+        99.54,
+        100.0
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 830,
+      "kill_rate_threatening": 100.0,
+      "ci95_threatening": [
+        99.54,
+        100.0
+      ],
+      "false_engages": 4,
+      "false_holds": 0,
+      "misses_dv_exhausted": 0,
+      "median_dv_mps": 145.5,
+      "iqr_dv_mps": [
+        136.1,
+        156.3
+      ],
+      "mean_dv_mps": 146.1,
+      "median_cpa_engaged_m": 2.79,
+      "median_miss_distance_m": 0.0,
+      "median_kf_rms_pos_m": 3.85,
+      "median_kf_rms_vel_mps": 3.09
+    },
+    {
+      "config_id": "C6_ekf7_vac_apn",
+      "short_label": "C6: EKF7 + Vac + APN (Filter + Drag APN)",
+      "label": "C6: EKF7 + Vacuum PIP + APN (Cartesian)",
+      "filter_type": "ekf7",
+      "pip_mode": "vacuum",
+      "guidance_law": "apn",
+      "sensor_model": "cartesian",
+      "runs": 1000,
+      "engaged": 831,
+      "kills": 830,
+      "misses": 1,
+      "no_engage": 169,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 99.88,
+      "ci95_engaged": [
+        99.32,
+        99.98
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 829,
+      "kill_rate_threatening": 99.88,
+      "ci95_threatening": [
+        99.32,
+        99.98
+      ],
+      "false_engages": 1,
+      "false_holds": 0,
+      "misses_dv_exhausted": 1,
+      "median_dv_mps": 130.2,
+      "iqr_dv_mps": [
+        120.3,
+        140.2
+      ],
+      "mean_dv_mps": 131.0,
+      "median_cpa_engaged_m": 2.79,
+      "median_miss_distance_m": 20355.29,
+      "median_kf_rms_pos_m": 3.83,
+      "median_kf_rms_vel_mps": 1.98
+    },
+    {
+      "config_id": "C7_ekf7_drag_apn",
+      "short_label": "C7: EKF7 + Drag + APN (Full GNC, Cartesian)",
+      "label": "C7: EKF7 + Drag PIP + APN (Cartesian)",
+      "filter_type": "ekf7",
+      "pip_mode": "drag",
+      "guidance_law": "apn",
+      "sensor_model": "cartesian",
+      "runs": 1000,
+      "engaged": 832,
+      "kills": 832,
+      "misses": 0,
+      "no_engage": 168,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 100.0,
+      "ci95_engaged": [
+        99.54,
+        100.0
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 830,
+      "kill_rate_threatening": 100.0,
+      "ci95_threatening": [
+        99.54,
+        100.0
+      ],
+      "false_engages": 2,
+      "false_holds": 0,
+      "misses_dv_exhausted": 0,
+      "median_dv_mps": 130.2,
+      "iqr_dv_mps": [
+        120.2,
+        140.2
+      ],
+      "mean_dv_mps": 130.6,
+      "median_cpa_engaged_m": 2.79,
+      "median_miss_distance_m": 0.0,
+      "median_kf_rms_pos_m": 3.83,
+      "median_kf_rms_vel_mps": 1.98
+    },
+    {
+      "config_id": "C8_ekf7_drag_zem",
+      "short_label": "C8: EKF7 + Drag + ZEM (Optimal ZEM, Cart)",
+      "label": "C8: EKF7 + Drag PIP + ZEM (Cartesian)",
+      "filter_type": "ekf7",
+      "pip_mode": "drag",
+      "guidance_law": "zem",
+      "sensor_model": "cartesian",
+      "runs": 1000,
+      "engaged": 832,
+      "kills": 832,
+      "misses": 0,
+      "no_engage": 168,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 100.0,
+      "ci95_engaged": [
+        99.54,
+        100.0
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 830,
+      "kill_rate_threatening": 100.0,
+      "ci95_threatening": [
+        99.54,
+        100.0
+      ],
+      "false_engages": 2,
+      "false_holds": 0,
+      "misses_dv_exhausted": 0,
+      "median_dv_mps": 130.6,
+      "iqr_dv_mps": [
+        121.6,
+        140.6
+      ],
+      "mean_dv_mps": 131.3,
+      "median_cpa_engaged_m": 2.84,
+      "median_miss_distance_m": 0.0,
+      "median_kf_rms_pos_m": 3.83,
+      "median_kf_rms_vel_mps": 1.98
+    },
+    {
+      "config_id": "C9_adv_rae",
+      "short_label": "C9: EKF7 + Drag + APN (RAE, Advanced Preset)",
+      "label": "C9: EKF7 + Drag PIP + APN (RAE, Advanced Preset)",
+      "filter_type": "ekf7",
+      "pip_mode": "drag",
+      "guidance_law": "apn",
+      "sensor_model": "rae",
+      "runs": 1000,
+      "engaged": 833,
+      "kills": 833,
+      "misses": 0,
+      "no_engage": 167,
+      "unengaged_ground": 0,
+      "kill_rate_engaged": 100.0,
+      "ci95_engaged": [
+        99.54,
+        100.0
+      ],
+      "threatening_total": 830,
+      "threatening_kills": 830,
+      "kill_rate_threatening": 100.0,
+      "ci95_threatening": [
+        99.54,
+        100.0
+      ],
+      "false_engages": 3,
+      "false_holds": 0,
+      "misses_dv_exhausted": 0,
+      "median_dv_mps": 130.5,
+      "iqr_dv_mps": [
+        121.3,
+        140.1
+      ],
+      "mean_dv_mps": 130.8,
+      "median_cpa_engaged_m": 3.39,
+      "median_miss_distance_m": 0.0,
+      "median_kf_rms_pos_m": 6.42,
+      "median_kf_rms_vel_mps": 1.77
+    }
+  ],
+  "contrasts": [
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C2_base_rae",
+      "change": "Cartesian -> RAE radar (KF6, vacuum PIP, PN)",
+      "threatening": 830,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 99.76,
+      "protection_diff_pts": -0.24,
+      "discordant_only_ref": 2,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 0.5,
+      "non_threatening": 170,
+      "false_engage_ref": 4,
+      "false_engage_cmp": 6,
+      "false_engage_mcnemar_p": 0.6249999999999994,
+      "paired_engaged": 833,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C3_ekf7_vac_pn",
+      "change": "KF6 -> EKF7 filter (vacuum PIP, PN)",
+      "threatening": 830,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 99.88,
+      "protection_diff_pts": -0.12,
+      "discordant_only_ref": 1,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 4,
+      "false_engage_cmp": 1,
+      "false_engage_mcnemar_p": 0.25000000000000006,
+      "paired_engaged": 831,
+      "median_dv_diff_mps": -7.7,
+      "median_dv_diff_ci95": [
+        -7.9,
+        -7.6
+      ]
+    },
+    {
+      "ref": "C3_ekf7_vac_pn",
+      "cmp": "C4_ekf7_drag_pn",
+      "change": "vacuum -> drag PIP (EKF7, PN)",
+      "threatening": 830,
+      "protection_ref_pct": 99.88,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.12,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 1,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 1,
+      "false_engage_cmp": 2,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 831,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C5_kf6_vac_apn",
+      "change": "PN -> free-fall PN, no coast gravity comp (KF6)",
+      "threatening": 830,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 4,
+      "false_engage_cmp": 4,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 834,
+      "median_dv_diff_mps": -242.7,
+      "median_dv_diff_ci95": [
+        -244.7,
+        -240.3
+      ]
+    },
+    {
+      "ref": "C5_kf6_vac_apn",
+      "cmp": "C6_ekf7_vac_apn",
+      "change": "KF6 -> EKF7 + drag feed-forward (vac PIP, APN)",
+      "threatening": 830,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 99.88,
+      "protection_diff_pts": -0.12,
+      "discordant_only_ref": 1,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 4,
+      "false_engage_cmp": 1,
+      "false_engage_mcnemar_p": 0.25000000000000006,
+      "paired_engaged": 831,
+      "median_dv_diff_mps": -15.2,
+      "median_dv_diff_ci95": [
+        -15.4,
+        -15.1
+      ]
+    },
+    {
+      "ref": "C6_ekf7_vac_apn",
+      "cmp": "C7_ekf7_drag_apn",
+      "change": "vacuum -> drag PIP (EKF7, APN)",
+      "threatening": 830,
+      "protection_ref_pct": 99.88,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.12,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 1,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 1,
+      "false_engage_cmp": 2,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 831,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "ref": "C7_ekf7_drag_apn",
+      "cmp": "C8_ekf7_drag_zem",
+      "change": "APN -> ZEM (EKF7, drag PIP)",
+      "threatening": 830,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 2,
+      "false_engage_cmp": 2,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 832,
+      "median_dv_diff_mps": 0.6,
+      "median_dv_diff_ci95": [
+        0.2,
+        1.2
+      ]
+    },
+    {
+      "ref": "C7_ekf7_drag_apn",
+      "cmp": "C9_adv_rae",
+      "change": "Cartesian -> RAE radar (full advanced stack)",
+      "threatening": 830,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 2,
+      "false_engage_cmp": 3,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 832,
+      "median_dv_diff_mps": 0.0,
+      "median_dv_diff_ci95": [
+        -0.4,
+        0.6
+      ]
+    },
+    {
+      "ref": "C1_base_cart",
+      "cmp": "C9_adv_rae",
+      "change": "baseline -> full advanced stack",
+      "threatening": 830,
+      "protection_ref_pct": 100.0,
+      "protection_cmp_pct": 100.0,
+      "protection_diff_pts": 0.0,
+      "discordant_only_ref": 0,
+      "discordant_only_cmp": 0,
+      "mcnemar_p": 1.0,
+      "non_threatening": 170,
+      "false_engage_ref": 4,
+      "false_engage_cmp": 3,
+      "false_engage_mcnemar_p": 1.0,
+      "paired_engaged": 831,
+      "median_dv_diff_mps": -258.5,
+      "median_dv_diff_ci95": [
+        -260.7,
+        -255.0
+      ]
+    }
+  ]
+}

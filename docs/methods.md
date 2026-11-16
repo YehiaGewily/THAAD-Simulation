@@ -46,6 +46,17 @@ $$
 
 multiplied by a drag compensation factor of 1.03.
 
+### 2.1 Atmosphere (`sim.atmosphere`)
+
+By default (`constant`) the air density does not change with altitude, so $k_T$ acts at full strength at every height. With `sim.atmosphere: exponential` the density falls off with scale height $H$ (`sim.scale_height`, 7 km by default), every drag coefficient is its sea-level value, and the drag acceleration is scaled by the density ratio:
+
+$$
+\frac{\rho(z)}{\rho_0} = e^{-z/H},\qquad
+\ddot{\mathbf r}_T = -g\,\hat{\mathbf z} - k_T\,e^{-z/H}\,\lVert\dot{\mathbf r}_T\rVert\,\dot{\mathbf r}_T .
+$$
+
+The same ratio scales the booster and kill-vehicle drag (§3), the 7-state filter's motion model and its drag feed-forward (§5.2), and the drag-integrated impact prediction, so the filter assumes the same atmosphere as the truth. At 40 km the ratio is 0.3 %, so a threat is close to drag-free until the last 20 km of its fall. The scenario's initial velocity is unchanged.
+
 ## 3. Interceptor
 
 Two stages. During boost a constant thrust $F_T$ = 150 kN acts along the guidance command; propellant burns at the rate set by thrust and specific impulse until $m_0 - m_b$ is spent:
@@ -131,6 +142,12 @@ The state is propagated over $\Delta t$ with RK4, and the $7\times 7$ covariance
 $$
 \frac{\partial\dot{\mathbf v}}{\partial\mathbf v} = -k_T\left(\lVert\mathbf v\rVert I_3 + \frac{\mathbf v\mathbf v^\top}{\lVert\mathbf v\rVert}\right),\qquad
 \frac{\partial\dot{\mathbf v}}{\partial k_T} = -\lVert\mathbf v\rVert\mathbf v.
+$$
+
+In the exponential atmosphere (§2.1) $k_T$ is the sea-level coefficient, the drag term is $-k_T e^{-z/H}\lVert\mathbf v\rVert\mathbf v$, both partial derivatives above are multiplied by $e^{-z/H}$, and the Jacobian gains an altitude column:
+
+$$
+\frac{\partial\dot{\mathbf v}}{\partial z} = \frac{k_T}{H}\,e^{-z/H}\,\lVert\mathbf v\rVert\mathbf v .
 $$
 
 Both filters use a linear solve for the Kalman gain and the numerically stable Joseph form for the covariance update:
@@ -295,6 +312,48 @@ The smallest tested budget that protects at least 99 % of threatening threats is
 
 ![Sensitivity study](figures/sensitivity_study.png)
 
+### The same studies in an exponential atmosphere
+
+Both scripts were rerun with `--atmosphere exponential` (§2.1): density falls off as $e^{-z/H}$ with $H = 7$ km, the drag coefficients become sea-level values, and the EKF7, the drag feed-forward and the drag PIP use the same density model. Seeds, interceptor, filter tuning and metrics are unchanged. Of the 1000 scenarios 830 are threatening and 170 are not.
+
+| Configuration | Protection (95 % CI) | Median divert $\Delta v$ | False engagements (of 170) | Constant density, for comparison |
+| --- | --- | --- | --- | --- |
+| C1 KF6 + vacuum + PN, Cartesian (baseline) | 100 % (99.5–100) | 390 m/s | 4 | 56.8 %, 435 m/s, 115 |
+| C2 KF6 + vacuum + PN, RAE | 99.8 % (99.1–99.9) | 389 m/s | 6 | 56.3 %, 435 m/s, 115 |
+| C3 EKF7 + vacuum + PN | 99.9 % (99.3–100) | 382 m/s | 1 | 58.0 %, 435 m/s, 113 |
+| C4 EKF7 + drag + PN | 100 % (99.5–100) | 382 m/s | 2 | 57.8 %, 435 m/s, 5 |
+| C5 KF6 + vacuum + APN (PN without coast gravity term) | 100 % (99.5–100) | 146 m/s | 4 | 100 %, 271 m/s, 115 |
+| C6 EKF7 + vacuum + APN | 99.9 % (99.3–100) | 130 m/s | 1 | 100 %, 132 m/s, 113 |
+| C7 EKF7 + drag + APN | 100 % (99.5–100) | 130 m/s | 2 | 100 %, 132 m/s, 5 |
+| C8 EKF7 + drag + ZEM | 100 % (99.5–100) | 131 m/s | 2 | 100 %, 130 m/s, 5 |
+| C9 EKF7 + drag + APN, RAE (`advanced.yaml`) | 100 % (99.5–100) | 130 m/s | 3 | 100 %, 132 m/s, 3 |
+
+No one-factor change moves protection or false engagements significantly (every McNemar $p \ge 0.25$). Two changes move divert use: dropping the coast gravity term (C1 → C5) saves a paired median of 243 m/s [95 % CI 240, 245], and KF6 → EKF7 saves 15 m/s with APN (C5 → C6, [15.1, 15.4]) and 8 m/s with PN (C1 → C3). The drag PIP, ZEM and the RAE radar change divert by less than 1 m/s.
+
+Four of the 9000 runs miss. Seeds 40 and 683 on C2 exhaust the divert budget and pass at about 10 m. Seed 483 on C3 and C6 (EKF7 with the vacuum PIP) has a predicted impact on the 30 km defended-area boundary, launches at 65 s instead of in the first 12 s, and misses by 20 km.
+
+**Divert budget** (nominal sea-level drag, 830 threatening):
+
+| Budget [m/s] | 100 | 150 | 200 | 250 | 300 | 350 | 435 | 550 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| C1 baseline | 0 % | 0 % | 0 % | 0 % | 21.4 % | 68.3 % | 100 % | 100 % |
+| C5 PN without coast $+g$ | 88.8 % | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % |
+| C7 EKF7 + drag PIP + APN | 92.5 % | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % |
+| C9 `advanced.yaml` (RAE) | 92.2 % | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % |
+
+**Threat drag** (sea-level $k_T$ from 0 to $8 \times 10^{-5}\ \mathrm{m^{-1}}$, 435 m/s budget): protection is 99.9–100 % for all four configurations at every value, median divert stays within 1 m/s of 390 (C1), 145 (C5) and 130 m/s (C7, C9), the threatening set only moves between 827 and 831, and false engagements stay between 1 and 7 of about 170.
+
+**Reading.**
+
+- **The drag effects were produced by the constant-density model.** Kills happen at a median 34.5 km altitude (range 25–43 km), where density is under 1 % of its sea-level value. Up to the intercept the threat is close to drag-free, so the vacuum PIP is nearly right, there is almost nothing to feed forward, and the baseline's 43-point protection deficit and its 115 false launches both disappear. Each exponential row is close to the constant-density drag-free row of the table above (390 / 144 / 127 m/s).
+- **The coast gravity term remains.** It is the only component with a large effect: 243 m/s of divert. The baseline needs the full 435 m/s budget for complete protection and is at 68 % with 350 m/s, while PN without the term protects every threatening threat with 150 m/s.
+- **Drag estimation contributes little before intercept.** The EKF7's drag estimate is still near its $3.5 \times 10^{-5}$ prior when the engagement ends, because drag is not observable in thin air (`tests/test_atmosphere.py` shows it converging only below about 30 km). Its 15 m/s saving has not been separated into drag feed-forward and the lower velocity error (median RMS 2.0 vs. 3.1 m/s). At a 100 m/s budget C7 protects 92.5 % (90.5–94.1) against 88.8 % (86.5–90.8) for C5.
+- **Which model to trust.** The exponential atmosphere is the more realistic of the two for an intercept above 25 km. The constant-density results above stand as a description of that model, and as a caution: an altitude-independent drag coefficient changes the conclusion of the trade study, not just its numbers.
+
+![GNC ablation, exponential atmosphere](figures/ablation_study_exp.png)
+
+![Sensitivity study, exponential atmosphere](figures/sensitivity_study_exp.png)
+
 ### Batch statistics
 
 `python -m thaad_sim.batch` runs N seeded engagements; rates are reported with 95 % Wilson score intervals. Over seeds 0–999, engineering mode engages 960 threats and kills 575 of them: 59.9 % (95 % CI 56.8–63.0 %). All 385 misses had spent the full divert budget. The demo kills 1000 of 1000 (95 % CI 99.6–100 %). `python -m thaad_sim.dashboard results/engineering.csv` collects these results with the studies above in one page. The workstation's live Monte Carlo (§9) calls the same per-run metrics through the same process pool, so a live batch over seeds 0 to N−1 matches the first N rows of the CSV for the same settings.
@@ -306,7 +365,7 @@ The smallest tested budget that protects at least 99 % of threatening threats is
 ## 8. Limitations
 
 - **Flat Earth, constant gravity**, no rotation. Acceptable for engagements of tens of kilometres, not for longer flights.
-- **Drag** has a constant coefficient with no atmosphere or Mach dependence, so it acts at full strength at 70 km and overstates the slowing of a real high-altitude threat (a dragged threat takes 1.5–2× its nominal flight time).
+- **Drag** has a constant coefficient by default, with no atmosphere or Mach dependence, so it acts at full strength at 70 km and overstates the slowing of a real high-altitude threat (a dragged threat takes 1.5–2× its nominal flight time). `sim.atmosphere: exponential` (§2.1) adds an isothermal density profile, and the ablation's drag-related conclusions do not hold under it (§7). There is still no Mach-dependent drag coefficient, and the presets, the workstation and the browser replay engine use constant density.
 - **Baseline filter & predictor mismatch vs. Advanced EKF**: The baseline preset (`configs/engineering.yaml`) intentionally uses a 6-state drag-free filter and vacuum predictor so the resulting PIP bias and early overconfidence can be measured (`scripts/drag_mismatch.py`, `scripts/filter_consistency.py`). `configs/advanced.yaml` resolves both with a 7-state Extended Kalman Filter (`kalman.filter_type: ekf7`) that estimates $k_T$ online and an RK4 drag-integrated impact predictor (`kalman.pip_mode: drag`).
 - **Radar measurement model**: The baseline preset uses an idealized Cartesian position-and-velocity sensor (`sensor.model: cartesian`), whereas `configs/advanced.yaml` uses a polar Range–Azimuth–Elevation (RAE) + Doppler radar (`sensor.model: rae`) with beam-aligned $6\times 6$ covariance; neither models update-rate scheduling, clutter, dropouts, or false tracks.
 - **Point masses**: no 6-DOF attitude dynamics, seeker field-of-view limits, or warhead/lethality fragmentation model. An optional 1st-order actuator lag (`interceptor.tau`) is supported, and a kill is geometric (closest approach under 10 m).

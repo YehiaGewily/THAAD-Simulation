@@ -5,7 +5,11 @@
 - Cartesian and Range-Azimuth-Elevation (RAE) polar radar measurement models
 - Closed-form vacuum and RK4 drag-integrated Predicted Impact Point (PIP)
 """
+import math
+
 import numpy as np
+
+from .atmosphere import density_ratio
 
 
 def cwna_process_noise(q, dt, dim=3):
@@ -20,8 +24,11 @@ def cwna_process_noise(q, dt, dim=3):
                          [dt**2 / 2 * I, dt * I]])
 
 
-def predict_impact_drag(pos, vel, drag, g, dt_step=2.0, max_steps=180):
+def predict_impact_drag(pos, vel, drag, g, dt_step=2.0, max_steps=180, scale_height=None):
     """Integrate [pos, vel] to z = 0 under gravity and quadratic drag using RK4.
+
+    With ``scale_height`` set, ``drag`` is the sea-level coefficient and the
+    density falls off as exp(-z / scale_height) along the integrated path.
 
     Returns (pip_3d, time_to_go) or (None, None) if not descending or no ground
     crossing is reached within max_steps.
@@ -49,6 +56,14 @@ def predict_impact_drag(pos, vel, drag, g, dt_step=2.0, max_steps=180):
     vx, vy = float(vel[0]), float(vel[1])
     h = float(dt_step)
     t_acc = 0.0
+    if scale_height is None:
+        def k_at(_z):
+            return k_d
+    else:
+        inv_h = 1.0 / scale_height
+
+        def k_at(zz):
+            return k_d * math.exp(-max(zz, 0.0) * inv_h)
 
     for _ in range(max_steps):
         px, py, pz0, pvx, pvy, pvz = x, y, z, vx, vy, vz
@@ -56,20 +71,25 @@ def predict_impact_drag(pos, vel, drag, g, dt_step=2.0, max_steps=180):
         dt = 0.1 if (z + vz * h <= 0.0 and h > 0.1) else h
         half = 0.5 * dt
 
+        # The drag coefficient at each stage follows the stage altitude
+        k1 = k_at(z)
         sp1 = (vx * vx + vy * vy + vz * vz) ** 0.5
-        ax1, ay1, az1 = -k_d * sp1 * vx, -k_d * sp1 * vy, -k_d * sp1 * vz - g
+        ax1, ay1, az1 = -k1 * sp1 * vx, -k1 * sp1 * vy, -k1 * sp1 * vz - g
 
         vx2, vy2, vz2 = vx + half * ax1, vy + half * ay1, vz + half * az1
+        k2 = k_at(z + half * vz)
         sp2 = (vx2 * vx2 + vy2 * vy2 + vz2 * vz2) ** 0.5
-        ax2, ay2, az2 = -k_d * sp2 * vx2, -k_d * sp2 * vy2, -k_d * sp2 * vz2 - g
+        ax2, ay2, az2 = -k2 * sp2 * vx2, -k2 * sp2 * vy2, -k2 * sp2 * vz2 - g
 
         vx3, vy3, vz3 = vx + half * ax2, vy + half * ay2, vz + half * az2
+        k3 = k_at(z + half * vz2)
         sp3 = (vx3 * vx3 + vy3 * vy3 + vz3 * vz3) ** 0.5
-        ax3, ay3, az3 = -k_d * sp3 * vx3, -k_d * sp3 * vy3, -k_d * sp3 * vz3 - g
+        ax3, ay3, az3 = -k3 * sp3 * vx3, -k3 * sp3 * vy3, -k3 * sp3 * vz3 - g
 
         vx4, vy4, vz4 = vx + dt * ax3, vy + dt * ay3, vz + dt * az3
+        k4 = k_at(z + dt * vz3)
         sp4 = (vx4 * vx4 + vy4 * vy4 + vz4 * vz4) ** 0.5
-        ax4, ay4, az4 = -k_d * sp4 * vx4, -k_d * sp4 * vy4, -k_d * sp4 * vz4 - g
+        ax4, ay4, az4 = -k4 * sp4 * vx4, -k4 * sp4 * vy4, -k4 * sp4 * vz4 - g
 
         c = dt / 6.0
         x += c * (vx + 2.0 * vx2 + 2.0 * vx3 + vx4)
@@ -159,10 +179,11 @@ def measure_radar(pos, vel, sensor_cfg, rng):
 
 class KalmanFilter:
     """Linear 6-state Kalman filter with gravity as a known control input."""
-    def __init__(self, dt, pos_std, vel_std, q, g, pip_mode="vacuum"):
+    def __init__(self, dt, pos_std, vel_std, q, g, pip_mode="vacuum", scale_height=None):
         self.dt = dt
         self.g = g
         self.pip_mode = pip_mode
+        self.scale_height = scale_height   # only used by a drag-mode impact prediction
         I3 = np.eye(3)
         self.F = np.block([[I3, dt * I3], [np.zeros((3, 3)), I3]])
         self.B = np.vstack((dt**2 / 2 * I3, dt * I3))
@@ -223,7 +244,8 @@ class KalmanFilter:
         mode = pip_mode or self.pip_mode
         if mode == "drag":
             k_d = self.est_drag if drag_override is None else drag_override
-            pip, _ = predict_impact_drag(self.x[:3], self.x[3:6], k_d, g)
+            pip, _ = predict_impact_drag(self.x[:3], self.x[3:6], k_d, g,
+                                         scale_height=self.scale_height)
             return pip
         t_sol = self.time_to_impact(g, pip_mode="vacuum")
         if t_sol is None:
@@ -239,7 +261,8 @@ class KalmanFilter:
         mode = pip_mode or self.pip_mode
         if mode == "drag":
             k_d = self.est_drag if drag_override is None else drag_override
-            _, t_sol = predict_impact_drag(self.x[:3], self.x[3:6], k_d, g)
+            _, t_sol = predict_impact_drag(self.x[:3], self.x[3:6], k_d, g,
+                                         scale_height=self.scale_height)
             return t_sol
         if self.x[5] >= 0:
             return None
@@ -256,12 +279,16 @@ class KalmanFilter:
         return t_sol
 
 
-def ekf7_derivative(x7, g):
-    """Continuous-time derivative d/dt [p, v, k_T] for the 7-state EKF."""
+def ekf7_derivative(x7, g, scale_height=None):
+    """Continuous-time derivative d/dt [p, v, k_T] for the 7-state EKF.
+
+    With ``scale_height`` set, k_T is the sea-level drag coefficient and the
+    drag acceleration is scaled by exp(-z / scale_height).
+    """
     vx, vy, vz = float(x7[3]), float(x7[4]), float(x7[5])
     k_t = max(float(x7[6]), 0.0)
     spd = (vx * vx + vy * vy + vz * vz) ** 0.5
-    c = -k_t * spd
+    c = -k_t * density_ratio(x7[2], scale_height) * spd
     return np.array([vx, vy, vz, c * vx, c * vy, c * vz - g, 0.0])
 
 
@@ -269,17 +296,25 @@ _I3 = np.eye(3)
 _I7 = np.eye(7)
 
 
-def ekf7_jacobian(x7):
-    """Analytical 7x7 continuous-time Jacobian F = df/dx of ekf7_derivative."""
+def ekf7_jacobian(x7, scale_height=None):
+    """Analytical 7x7 continuous-time Jacobian F = df/dx of ekf7_derivative.
+
+    With density ratio e(z) = exp(-z / H), the drag acceleration is
+    a = -k e |v| v, so da/dv = -k e (|v| I + v v^T / |v|), da/dk = -e |v| v
+    and da/dz = (k e / H) |v| v. The last term is absent for constant density.
+    """
     v = x7[3:6]
     vx, vy, vz = float(v[0]), float(v[1]), float(v[2])
     k_t = max(float(x7[6]), 0.0)
     spd = (vx * vx + vy * vy + vz * vz) ** 0.5
+    e = density_ratio(x7[2], scale_height)
     F = np.zeros((7, 7))
     F[0, 3] = F[1, 4] = F[2, 5] = 1.0
     if spd > 1e-9:
-        F[3:6, 3:6] = -k_t * (spd * _I3 + np.outer(v, v) / spd)
-    F[3:6, 6] = -spd * v
+        F[3:6, 3:6] = -(k_t * e) * (spd * _I3 + np.outer(v, v) / spd)
+    F[3:6, 6] = -(e * spd) * v
+    if scale_height is not None and x7[2] > 0.0:
+        F[3:6, 2] = (k_t * e / scale_height * spd) * v
     return F
 
 
@@ -291,10 +326,14 @@ class ExtendedKalmanFilter:
     while also maintaining the 7th ballistic drag state ``k_T``.
     """
     def __init__(self, dt, pos_std, vel_std, q, g,
-                 drag_init=3e-5, drag_std=3e-5, q_drag=1e-12, pip_mode="drag"):
+                 drag_init=3e-5, drag_std=3e-5, q_drag=1e-12, pip_mode="drag",
+                 scale_height=None):
         self.dt = dt
         self.g = g
         self.pip_mode = pip_mode
+        # None = constant density. Otherwise the filter assumes the same
+        # exponential atmosphere as the truth and k_T is the sea-level value.
+        self.scale_height = scale_height
         self.drag_init = float(drag_init)
         self.drag_std = float(drag_std)
 
@@ -329,16 +368,17 @@ class ExtendedKalmanFilter:
 
     @property
     def est_target_accel(self):
-        """Estimated aerodynamic drag acceleration vector -k_T * ||v|| * v."""
+        """Estimated aerodynamic drag acceleration vector -k_T * e(z) * ||v|| * v."""
         v = self.x7[3:6]
-        return -self.est_drag * np.linalg.norm(v) * v
+        k = self.est_drag * density_ratio(self.x7[2], self.scale_height)
+        return -k * np.linalg.norm(v) * v
 
     def _predict_state_rk4(self, x7):
-        dt, g = self.dt, self.g
-        k1 = ekf7_derivative(x7, g)
-        k2 = ekf7_derivative(x7 + 0.5 * dt * k1, g)
-        k3 = ekf7_derivative(x7 + 0.5 * dt * k2, g)
-        k4 = ekf7_derivative(x7 + dt * k3, g)
+        dt, g, sh = self.dt, self.g, self.scale_height
+        k1 = ekf7_derivative(x7, g, sh)
+        k2 = ekf7_derivative(x7 + 0.5 * dt * k1, g, sh)
+        k3 = ekf7_derivative(x7 + 0.5 * dt * k2, g, sh)
+        k4 = ekf7_derivative(x7 + dt * k3, g, sh)
         nxt = x7 + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
         nxt[6] = np.clip(nxt[6], 0.0, 5e-4)
         return nxt
@@ -356,7 +396,7 @@ class ExtendedKalmanFilter:
             return self.x7[:3].copy(), self.x7[3:6].copy()
 
         # Nonlinear RK4 state propagation + 2nd-order Taylor state transition Phi
-        F = ekf7_jacobian(self.x7)
+        F = ekf7_jacobian(self.x7, self.scale_height)
         Fdt = F * self.dt
         Phi = _I7 + Fdt + 0.5 * (Fdt @ Fdt)
         self.x7 = self._predict_state_rk4(self.x7)
@@ -395,7 +435,8 @@ class ExtendedKalmanFilter:
             if drag_override is None and getattr(self, "_pip_cache", None) is not None:
                 return self._pip_cache[0]
             k_d = self.est_drag if drag_override is None else drag_override
-            res = predict_impact_drag(self.x7[:3], self.x7[3:6], k_d, g)
+            res = predict_impact_drag(self.x7[:3], self.x7[3:6], k_d, g,
+                                      scale_height=self.scale_height)
             if drag_override is None:
                 self._pip_cache = res
             return res[0]
@@ -414,7 +455,8 @@ class ExtendedKalmanFilter:
             if drag_override is None and getattr(self, "_pip_cache", None) is not None:
                 return self._pip_cache[1]
             k_d = self.est_drag if drag_override is None else drag_override
-            res = predict_impact_drag(self.x7[:3], self.x7[3:6], k_d, g)
+            res = predict_impact_drag(self.x7[:3], self.x7[3:6], k_d, g,
+                                      scale_height=self.scale_height)
             if drag_override is None:
                 self._pip_cache = res
             return res[1]
@@ -442,8 +484,10 @@ def make_filter(cfg):
             k.q, cfg.sim.g,
             drag_init=k.drag_init, drag_std=k.drag_std,
             q_drag=k.q_drag, pip_mode=k.pip_mode,
+            scale_height=cfg.sim.density_scale_height,
         )
     return KalmanFilter(
         cfg.sim.dt, cfg.sensor.pos_noise, cfg.sensor.vel_noise,
         k.q, cfg.sim.g, pip_mode=k.pip_mode,
+        scale_height=cfg.sim.density_scale_height,
     )

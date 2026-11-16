@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 
 import yaml
 
+from .atmosphere import ATMOSPHERES, DEFAULT_SCALE_HEIGHT
 from .integrators import INTEGRATORS
 
 LAUNCH_RULES = ("pip_gated", "fire_on_track")
@@ -29,6 +30,13 @@ class SimSettings:
     integrator: str    # "rk4" or "euler"
     t_max: float       # s, base window (extended per scenario)
     g: float           # m/s^2
+    atmosphere: str = "constant"     # "constant" density or "exponential" (rho ~ exp(-z / scale_height))
+    scale_height: float = DEFAULT_SCALE_HEIGHT   # m, used by the exponential atmosphere
+
+    @property
+    def density_scale_height(self):
+        """Scale height in m for the exponential atmosphere, None for constant density."""
+        return self.scale_height if self.atmosphere == "exponential" else None
 
 
 @dataclass(frozen=True)
@@ -115,6 +123,11 @@ class SimConfig:
         if self.sim.integrator not in INTEGRATORS:
             raise ValueError(f"sim.integrator must be one of {INTEGRATORS}, "
                              f"got {self.sim.integrator!r}")
+        if self.sim.atmosphere not in ATMOSPHERES:
+            raise ValueError(f"sim.atmosphere must be one of {ATMOSPHERES}, "
+                             f"got {self.sim.atmosphere!r}")
+        if self.sim.scale_height <= 0:
+            raise ValueError(f"sim.scale_height must be > 0, got {self.sim.scale_height!r}")
         if self.sensor.model not in SENSOR_MODELS:
             raise ValueError(f"sensor.model must be one of {SENSOR_MODELS}, "
                              f"got {self.sensor.model!r}")
@@ -149,6 +162,8 @@ class SimConfig:
         i, e = self.interceptor, self.engagement
         p = {
             'dt': self.sim.dt, 't_max': self.sim.t_max, 'g': self.sim.g,
+            # Present only for the exponential atmosphere; drag coefficients are then sea-level values
+            'scale_height': self.sim.density_scale_height,
             'pos_noise': self.sensor.pos_noise, 'vel_noise': self.sensor.vel_noise,
             'range_noise': self.sensor.range_noise if self.sensor.model == "rae" else None,
             'angle_noise': self.sensor.angle_noise if self.sensor.model == "rae" else None,

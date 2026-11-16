@@ -22,9 +22,14 @@ configuration's own launch decisions. One-factor contrasts are tested with an
 exact paired McNemar test on the threatening seeds, and divert use with a
 bootstrap interval on the paired per-seed difference.
 
+With ``--atmosphere exponential`` every configuration flies in an exponential
+atmosphere (sim.atmosphere), and the outputs get an ``_exp`` suffix so the
+constant-density results are kept. The trade-study files are not rewritten.
+
 Usage:
     py scripts/ablation_study.py --runs 1000
     py scripts/ablation_study.py --from-csv      # re-analyse results/ablation_1000.csv without re-running
+    py scripts/ablation_study.py --atmosphere exponential
 """
 from __future__ import annotations
 
@@ -80,10 +85,15 @@ ABLATION_COLUMNS = (
 )
 
 
-def build_configs():
+def with_atmosphere(cfg, atmosphere):
+    """The same config flying in the given atmosphere model."""
+    return replace(cfg, sim=replace(cfg.sim, atmosphere=atmosphere))
+
+
+def build_configs(atmosphere="constant"):
     """Return ordered list of (config_id, short_label, full_label, SimConfig)."""
-    base = load_config(ROOT / "configs" / "engineering.yaml")
-    adv = load_config(ROOT / "configs" / "advanced.yaml")
+    base = with_atmosphere(load_config(ROOT / "configs" / "engineering.yaml"), atmosphere)
+    adv = with_atmosphere(load_config(ROOT / "configs" / "advanced.yaml"), atmosphere)
 
     kf6_cfg = base.kalman
     ekf7_vac = replace(adv.kalman, pip_mode="vacuum")
@@ -166,7 +176,8 @@ def fast_run_metrics(job):
 
     sc = spawn_threat(cfg, rng)
     threat = sc.threat
-    interceptor = Interceptor([0, 0, 0], cfg.interceptor, g, cfg.sim.integrator)
+    interceptor = Interceptor([0, 0, 0], cfg.interceptor, g, cfg.sim.integrator,
+                              scale_height=cfg.sim.density_scale_height)
     kf = make_filter(cfg)
 
     t_max = max(cfg.sim.t_max, sc.impact_time * 2.0 + 30.0)
@@ -468,7 +479,7 @@ def _style_ax(ax, title, xlabel, ylabel):
         ax.spines[side].set_color(INK_3)
 
 
-def plot_ablation(summaries, by_cfg, n_runs, out_path):
+def plot_ablation(summaries, by_cfg, n_runs, out_path, note=""):
     fig, axes = plt.subplots(1, 3, figsize=(16.8, 5.4), facecolor=SURFACE,
                              gridspec_kw={"width_ratios": [1.25, 1.0, 0.8]})
 
@@ -539,7 +550,8 @@ def plot_ablation(summaries, by_cfg, n_runs, out_path):
         ax.text(v + 2.0, yi, f"{v}", va="center", ha="left", fontsize=8.3, color=INK, fontweight="semibold")
 
     fig.suptitle(
-        f"Component-by-component GNC ablation ({n_runs} paired seeds, identical interceptor, 435 m/s KV divert budget)",
+        f"Component-by-component GNC ablation ({n_runs} paired seeds, identical interceptor, "
+        f"435 m/s KV divert budget){note}",
         x=0.01, ha="left", fontsize=11.5, color=INK, fontweight="bold",
     )
     fig.tight_layout()
@@ -652,10 +664,19 @@ def main(argv=None):
     parser.add_argument("--workers", type=int, default=None, help="worker processes (default: CPU count)")
     parser.add_argument("--from-csv", action="store_true",
                         help="re-analyse results/ablation_1000.csv instead of re-running the engagements")
+    parser.add_argument("--atmosphere", choices=("constant", "exponential"), default="constant",
+                        help="density model for every configuration (default: constant)")
     args = parser.parse_args(argv)
 
+    global OUT_CSV, OUT_JSON, OUT_FIG
+    exponential = args.atmosphere == "exponential"
+    if exponential:
+        OUT_CSV = OUT_CSV.with_name("ablation_1000_exp.csv")
+        OUT_JSON = OUT_JSON.with_name("ablation_summary_exp.json")
+        OUT_FIG = OUT_FIG.with_name("ablation_study_exp.png")
+
     t0 = time.time()
-    configs = build_configs()
+    configs = build_configs(args.atmosphere)
     workers = args.workers or os.cpu_count() or 1
 
     with multiprocessing.Pool(workers) as pool:
@@ -673,7 +694,7 @@ def main(argv=None):
             print(f"Wrote {OUT_CSV} in {time.time() - t0:.1f} s")
 
         print(f"Computing true unintercepted impact points for {len(seeds)} seeds...")
-        true_impacts = compute_true_impacts(seeds, pool=pool)
+        true_impacts = compute_true_impacts(seeds, cfg=configs[0][3], pool=pool)
 
     def_rad = configs[0][3].engagement.defended_radius
     n_threatening = sum(1 for r in true_impacts.values() if r <= def_rad)
@@ -707,6 +728,7 @@ def main(argv=None):
     print()
 
     out_data = {
+        **({"atmosphere": "exponential", "scale_height_m": configs[0][3].sim.scale_height} if exponential else {}),
         "runs_per_config": len(seeds),
         "threatening_scenarios": n_threatening,
         "non_threatening_scenarios": len(seeds) - n_threatening,
@@ -718,8 +740,13 @@ def main(argv=None):
     OUT_JSON.write_bytes((json.dumps(out_data, indent=2) + "\n").encode("utf-8"))
     print(f"Wrote {OUT_JSON}")
 
-    plot_ablation(summaries, by_cfg, len(seeds), OUT_FIG)
-    update_trade_study(summaries, by_cfg, len(seeds))
+    if exponential:
+        h_km = configs[0][3].sim.scale_height / 1000.0
+        plot_ablation(summaries, by_cfg, len(seeds), OUT_FIG,
+                      note=f"\nExponential atmosphere, scale height {h_km:g} km; drag coefficients are sea-level values")
+    else:
+        plot_ablation(summaries, by_cfg, len(seeds), OUT_FIG)
+        update_trade_study(summaries, by_cfg, len(seeds))
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ the interceptor, so the interceptor's mass is integrated with its motion.
 """
 import numpy as np
 
+from .atmosphere import density_ratio
 from .guidance import G0, guidance_command, limit_divert, limit_g, pn_command
 from .integrators import integrate
 
@@ -14,9 +15,12 @@ BOOST_STEER_FRACTION = 0.1   # share of the maneuver command applied during boos
 
 
 class BallisticThreat:
-    def __init__(self, pos, vel, drag, g, integrator="rk4"):
+    def __init__(self, pos, vel, drag, g, integrator="rk4", scale_height=None):
+        """``drag`` is the quadratic drag coefficient in 1/m. With ``scale_height``
+        set it is the sea-level value and falls off as exp(-z / scale_height)."""
         self.state = np.hstack((pos, vel)).astype(float)
         self.drag = drag
+        self.scale_height = scale_height
         self.g = g
         self.integrator = integrator
         self.active = True
@@ -32,7 +36,8 @@ class BallisticThreat:
     def derivative(self, state):
         """d/dt [p, v] under gravity and quadratic drag."""
         vel = state[3:]
-        acc = -self.drag * np.linalg.norm(vel) * vel
+        k = self.drag * density_ratio(state[2], self.scale_height)
+        acc = -k * np.linalg.norm(vel) * vel
         acc[2] -= self.g
         return np.concatenate((vel, acc))
 
@@ -56,9 +61,12 @@ class BallisticThreat:
 
 
 class Interceptor:
-    def __init__(self, pos, spec, g, integrator="rk4"):
-        """``spec`` is an InterceptorSettings; ``g`` is gravity in m/s^2."""
+    def __init__(self, pos, spec, g, integrator="rk4", scale_height=None):
+        """``spec`` is an InterceptorSettings; ``g`` is gravity in m/s^2. With
+        ``scale_height`` set, the booster and kill-vehicle drag coefficients are
+        sea-level values that fall off as exp(-z / scale_height)."""
         self.spec = spec
+        self.scale_height = scale_height
         self.g = g
         self.integrator = integrator
         self.state = np.hstack((pos, [0., 0., 0.], [spec.mass_wet])).astype(float)
@@ -91,10 +99,12 @@ class Interceptor:
     def _derivative(self, thrust, maneuver, drag, mass_flow):
         """d/dt [p, v, m] with thrust force, maneuver acceleration and mass flow held constant."""
         g = self.g
+        scale_height = self.scale_height
 
         def deriv(state):
             vel, m = state[3:6], state[6]
-            acc = (thrust - drag * np.linalg.norm(vel) * vel) / m + maneuver
+            k = drag * density_ratio(state[2], scale_height)
+            acc = (thrust - k * np.linalg.norm(vel) * vel) / m + maneuver
             acc[2] -= g
             return np.concatenate((vel, acc, [-mass_flow]))
         return deriv

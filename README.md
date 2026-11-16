@@ -59,6 +59,10 @@ The RAE radar and ZEM vs. APN change neither outcome measurably, and sweeping ra
 
 ![Sensitivity study](docs/figures/sensitivity_study.png)
 
+**Caveat: these drag effects depend on the constant-density model.** All the numbers above use the default altitude-independent drag coefficient. Rerunning both studies with `--atmosphere exponential` (density $\propto e^{-z/7\,\mathrm{km}}$, known to the filter) puts the intercepts, at a median 34.5 km, in air under 1% of sea-level density, and the picture changes: the baseline protects 100% of threatening threats (830 / 830) at the 435 m/s budget, false engagements fall to 1–6 of 170 for every configuration, and threat drag from 0 to 8 × 10⁻⁵ 1/m changes nothing. The coast gravity term is the one large effect left. Removing it cuts median divert from 390 to 146 m/s, so the baseline needs the full 435 m/s for complete protection (68% at 350 m/s) while PN without the term needs 150 m/s. The EKF7 saves a further 15 m/s. Details in [docs/methods.md](docs/methods.md#the-same-studies-in-an-exponential-atmosphere).
+
+![GNC ablation, exponential atmosphere](docs/figures/ablation_study_exp.png)
+
 ![GNC trade study](docs/figures/gnc_trade_study.png)
 
 ![Engineering-mode outcome rates](docs/figures/engineering_outcomes.png)
@@ -134,7 +138,7 @@ Two browser tools sit on top of `thaad_sim/` without altering the physics core (
 
 ## Limitations & Possible Extensions
 
-Analytical point-mass sandbox: flat Earth with constant gravity, constant quadratic drag coefficient (no exponential atmosphere $\rho(z)$ or Mach $C_D(M)$ table), and no 6-DOF attitude or physical seeker gimbal dynamics ([docs/methods.md §8](docs/methods.md#8-limitations)).
+Analytical point-mass sandbox: flat Earth with constant gravity, constant quadratic drag coefficient by default (an exponential atmosphere $\rho(z)$ is available as `sim.atmosphere: exponential` and in the study scripts; no Mach $C_D(M)$ table), and no 6-DOF attitude or physical seeker gimbal dynamics ([docs/methods.md §8](docs/methods.md#8-limitations)).
 
 **Possible extensions:** multi-target salvos (shoot-look-shoot fire control), US Standard Atmosphere $\rho(z)$ and Mach drag curves $C_D(M)$, and 6-DOF rigid-body dynamics with strapdown/gimballed terminal IR seeker tracking.
 

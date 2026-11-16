@@ -20,6 +20,9 @@ Writes:
   - results/sensitivity_summary.json
   - docs/figures/sensitivity_study.png
 
+With ``--atmosphere exponential`` every run uses the exponential atmosphere and
+the outputs get an ``_exp`` suffix; the swept drag is then the sea-level value.
+
 Usage:
     py scripts/sensitivity_study.py --runs 1000
     py scripts/sensitivity_study.py --from-csv      # re-analyse the CSVs without re-running
@@ -74,6 +77,7 @@ MARKERS = {"C1_base_cart": "o", "C5_kf6_vac_apn": "s", "C7_ekf7_drag_apn": "D", 
 DIVERT_VALUES = [100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 435.0, 550.0]
 DRAG_VALUES = [0.0, 1.0e-5, 2.0e-5, 4.0e-5, 6.0e-5, 8.0e-5]
 SWEEP_COLUMNS = ("sweep", "sweep_value") + ablation.ABLATION_COLUMNS
+PLOT_NOTE = ""   # extra title line, set for the exponential atmosphere
 INK, INK_2 = ablation.INK, ablation.INK_2
 
 
@@ -212,7 +216,8 @@ def plot(summary, n_runs, out_path):
     ax.axvline(4.0, color=INK_2, ls="--", lw=1.0)
     ax.set_ylim(0, 470)
 
-    fig.suptitle(f"Sensitivity of the GNC ablation to divert budget and drag mismatch ({n_runs} paired seeds per point)",
+    fig.suptitle(f"Sensitivity of the GNC ablation to divert budget and drag mismatch "
+                 f"({n_runs} paired seeds per point){PLOT_NOTE}",
                  x=0.01, ha="left", fontsize=11.5, color=INK, fontweight="bold")
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -229,9 +234,17 @@ def main(argv=None):
     parser.add_argument("--from-csv", action="store_true", help="re-analyse the sweep CSVs instead of re-running")
     parser.add_argument("--smoke", type=Path, default=None, metavar="DIR",
                         help="quick check: two values per sweep, all outputs written to DIR")
+    parser.add_argument("--atmosphere", choices=("constant", "exponential"), default="constant",
+                        help="density model for every configuration; exponential writes *_exp outputs")
     args = parser.parse_args(argv)
 
-    global OUT_JSON, OUT_FIG
+    global OUT_JSON, OUT_FIG, PLOT_NOTE
+    if args.atmosphere == "exponential":
+        OUT_JSON = OUT_JSON.with_name("sensitivity_summary_exp.json")
+        OUT_FIG = OUT_FIG.with_name("sensitivity_study_exp.png")
+        for k in CSV:
+            CSV[k] = CSV[k].with_name(CSV[k].stem + "_exp.csv")
+        PLOT_NOTE = "\nExponential atmosphere; drag values are sea-level coefficients"
     if args.smoke:
         args.smoke.mkdir(parents=True, exist_ok=True)
         OUT_JSON, OUT_FIG = args.smoke / "sensitivity_summary.json", args.smoke / "sensitivity_study.png"
@@ -245,7 +258,7 @@ def main(argv=None):
         if n not in SWEEPS:
             parser.error(f"unknown sweep {n!r}; choose from {', '.join(SWEEPS)}")
 
-    base_cfgs = {cid: cfg for cid, _, _, cfg in ablation.build_configs() if cid in SWEPT}
+    base_cfgs = {cid: cfg for cid, _, _, cfg in ablation.build_configs(args.atmosphere) if cid in SWEPT}
     seeds = list(range(args.runs))
     workers = args.workers or os.cpu_count() or 1
 

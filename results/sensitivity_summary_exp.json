@@ -1,0 +1,2093 @@
+{
+  "divert": [
+    {
+      "value": 100.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 0,
+          "threatening_total": 830,
+          "threatening_kills": 0,
+          "kill_rate_threatening": 0.0,
+          "ci95_threatening": [
+            0.0,
+            0.46
+          ],
+          "kill_rate_engaged": 0.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 100.0,
+          "iqr_dv_mps": [
+            100.0,
+            100.0
+          ],
+          "misses_dv_exhausted": 834,
+          "misses": 834
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 740,
+          "threatening_total": 830,
+          "threatening_kills": 737,
+          "kill_rate_threatening": 88.8,
+          "ci95_threatening": [
+            86.47,
+            90.76
+          ],
+          "kill_rate_engaged": 88.73,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 100.0,
+          "iqr_dv_mps": [
+            100.0,
+            100.0
+          ],
+          "misses_dv_exhausted": 94,
+          "misses": 94
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 769,
+          "threatening_total": 830,
+          "threatening_kills": 768,
+          "kill_rate_threatening": 92.53,
+          "ci95_threatening": [
+            90.54,
+            94.13
+          ],
+          "kill_rate_engaged": 92.43,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 100.0,
+          "iqr_dv_mps": [
+            100.0,
+            100.0
+          ],
+          "misses_dv_exhausted": 63,
+          "misses": 63
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 767,
+          "threatening_total": 830,
+          "threatening_kills": 765,
+          "kill_rate_threatening": 92.17,
+          "ci95_threatening": [
+            90.14,
+            93.81
+          ],
+          "kill_rate_engaged": 92.08,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 100.0,
+          "iqr_dv_mps": [
+            100.0,
+            100.0
+          ],
+          "misses_dv_exhausted": 66,
+          "misses": 66
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 0.0,
+          "protection_cmp_pct": 88.8,
+          "protection_diff_pts": 88.8,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 737,
+          "mcnemar_p": 2.766452331409006e-222,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 88.8,
+          "protection_cmp_pct": 92.53,
+          "protection_diff_pts": 3.73,
+          "discordant_only_ref": 3,
+          "discordant_only_cmp": 34,
+          "mcnemar_p": 1.2331292964518076e-07,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 92.53,
+          "protection_cmp_pct": 92.17,
+          "protection_diff_pts": -0.36,
+          "discordant_only_ref": 14,
+          "discordant_only_cmp": 11,
+          "mcnemar_p": 0.690037965774535,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "value": 150.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 0,
+          "threatening_total": 830,
+          "threatening_kills": 0,
+          "kill_rate_threatening": 0.0,
+          "ci95_threatening": [
+            0.0,
+            0.46
+          ],
+          "kill_rate_engaged": 0.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 150.0,
+          "iqr_dv_mps": [
+            150.0,
+            150.0
+          ],
+          "misses_dv_exhausted": 834,
+          "misses": 834
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            150.0
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 0.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 100.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 830,
+          "mcnemar_p": 2.7934029957199424e-250,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -4.5,
+          "median_dv_diff_ci95": [
+            -5.6,
+            -3.0
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -13.7,
+          "median_dv_diff_ci95": [
+            -14.0,
+            -13.4
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "value": 200.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 0,
+          "threatening_total": 830,
+          "threatening_kills": 0,
+          "kill_rate_threatening": 0.0,
+          "ci95_threatening": [
+            0.0,
+            0.46
+          ],
+          "kill_rate_engaged": 0.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 200.0,
+          "iqr_dv_mps": [
+            200.0,
+            200.0
+          ],
+          "misses_dv_exhausted": 834,
+          "misses": 834
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 0.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 100.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 830,
+          "mcnemar_p": 2.7934029957199424e-250,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -54.5,
+          "median_dv_diff_ci95": [
+            -55.6,
+            -53.0
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.4,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 250.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 0,
+          "threatening_total": 830,
+          "threatening_kills": 0,
+          "kill_rate_threatening": 0.0,
+          "ci95_threatening": [
+            0.0,
+            0.46
+          ],
+          "kill_rate_engaged": 0.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 250.0,
+          "iqr_dv_mps": [
+            250.0,
+            250.0
+          ],
+          "misses_dv_exhausted": 834,
+          "misses": 834
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 0.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 100.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 830,
+          "mcnemar_p": 2.7934029957199424e-250,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -104.5,
+          "median_dv_diff_ci95": [
+            -105.6,
+            -103.0
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.4,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 300.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 178,
+          "threatening_total": 830,
+          "threatening_kills": 178,
+          "kill_rate_threatening": 21.45,
+          "ci95_threatening": [
+            18.79,
+            24.37
+          ],
+          "kill_rate_engaged": 21.34,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 300.0,
+          "iqr_dv_mps": [
+            300.0,
+            300.0
+          ],
+          "misses_dv_exhausted": 656,
+          "misses": 656
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 21.45,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 78.55,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 652,
+          "mcnemar_p": 1.0702194086955468e-196,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -154.5,
+          "median_dv_diff_ci95": [
+            -155.6,
+            -153.0
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.4,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 350.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 569,
+          "threatening_total": 830,
+          "threatening_kills": 567,
+          "kill_rate_threatening": 68.31,
+          "ci95_threatening": [
+            65.07,
+            71.39
+          ],
+          "kill_rate_engaged": 68.23,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 350.0,
+          "iqr_dv_mps": [
+            350.0,
+            350.0
+          ],
+          "misses_dv_exhausted": 265,
+          "misses": 265
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 68.31,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 31.69,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 263,
+          "mcnemar_p": 1.3494013367334974e-79,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -202.0,
+          "median_dv_diff_ci95": [
+            -203.3,
+            -201.1
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.4,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 435.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 390.1,
+          "iqr_dv_mps": [
+            362.5,
+            415.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -242.7,
+          "median_dv_diff_ci95": [
+            -244.7,
+            -240.3
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.4,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 550.0,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 390.1,
+          "iqr_dv_mps": [
+            362.5,
+            415.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -242.7,
+          "median_dv_diff_ci95": [
+            -244.8,
+            -240.3
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.4,
+            0.6
+          ]
+        }
+      }
+    }
+  ],
+  "runs_per_point": 1000,
+  "drag": [
+    {
+      "value": 0.0,
+      "threatening": 827,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 827,
+          "threatening_kills": 827,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 7,
+          "false_holds": 0,
+          "median_dv_mps": 389.0,
+          "iqr_dv_mps": [
+            362.8,
+            414.6
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 827,
+          "threatening_kills": 827,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 7,
+          "false_holds": 0,
+          "median_dv_mps": 145.4,
+          "iqr_dv_mps": [
+            135.3,
+            155.5
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 827,
+          "threatening_kills": 827,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 5,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.7,
+            139.9
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 827,
+          "threatening_kills": 827,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 6,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.6,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 827,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 173,
+          "false_engage_ref": 7,
+          "false_engage_cmp": 7,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -243.0,
+          "median_dv_diff_ci95": [
+            -245.1,
+            -240.6
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 827,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 173,
+          "false_engage_ref": 7,
+          "false_engage_cmp": 5,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.1,
+          "median_dv_diff_ci95": [
+            -15.3,
+            -15.0
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 827,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 173,
+          "false_engage_ref": 5,
+          "false_engage_cmp": 6,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.2,
+          "median_dv_diff_ci95": [
+            -0.1,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 1e-05,
+      "threatening": 828,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 6,
+          "false_holds": 0,
+          "median_dv_mps": 389.3,
+          "iqr_dv_mps": [
+            362.7,
+            414.6
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 6,
+          "false_holds": 0,
+          "median_dv_mps": 145.2,
+          "iqr_dv_mps": [
+            135.4,
+            155.9
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 130.0,
+          "iqr_dv_mps": [
+            120.2,
+            139.8
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 5,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            120.6,
+            139.7
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 828,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 172,
+          "false_engage_ref": 6,
+          "false_engage_cmp": 6,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -243.2,
+          "median_dv_diff_ci95": [
+            -245.4,
+            -240.3
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 828,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 172,
+          "false_engage_ref": 6,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.5,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 828,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 172,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 5,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.2,
+          "median_dv_diff_ci95": [
+            -0.1,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 2e-05,
+      "threatening": 828,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 6,
+          "false_holds": 0,
+          "median_dv_mps": 389.8,
+          "iqr_dv_mps": [
+            362.4,
+            414.5
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 6,
+          "false_holds": 0,
+          "median_dv_mps": 145.3,
+          "iqr_dv_mps": [
+            135.6,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 129.8,
+          "iqr_dv_mps": [
+            120.1,
+            140.6
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 828,
+          "threatening_kills": 828,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 5,
+          "false_holds": 0,
+          "median_dv_mps": 130.9,
+          "iqr_dv_mps": [
+            120.7,
+            140.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 828,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 172,
+          "false_engage_ref": 6,
+          "false_engage_cmp": 6,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -242.4,
+          "median_dv_diff_ci95": [
+            -244.7,
+            -240.0
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 828,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 172,
+          "false_engage_ref": 6,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.3,
+          "median_dv_diff_ci95": [
+            -15.5,
+            -15.0
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 828,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 172,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 5,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.5,
+          "median_dv_diff_ci95": [
+            0.1,
+            0.9
+          ]
+        }
+      }
+    },
+    {
+      "value": 4e-05,
+      "threatening": 830,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 390.1,
+          "iqr_dv_mps": [
+            362.5,
+            415.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 834,
+          "kills": 834,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.5,
+          "iqr_dv_mps": [
+            136.1,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.2,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 830,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 3,
+          "false_holds": 0,
+          "median_dv_mps": 130.5,
+          "iqr_dv_mps": [
+            121.3,
+            140.1
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 834,
+          "median_dv_diff_mps": -242.7,
+          "median_dv_diff_ci95": [
+            -244.7,
+            -240.3
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 831,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.1
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 830,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 170,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 3,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.0,
+          "median_dv_diff_ci95": [
+            -0.4,
+            0.6
+          ]
+        }
+      }
+    },
+    {
+      "value": 6e-05,
+      "threatening": 831,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 835,
+          "kills": 834,
+          "threatening_total": 831,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 99.88,
+          "ci95_threatening": [
+            99.32,
+            99.98
+          ],
+          "kill_rate_engaged": 99.88,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 389.8,
+          "iqr_dv_mps": [
+            363.3,
+            415.0
+          ],
+          "misses_dv_exhausted": 1,
+          "misses": 1
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 835,
+          "kills": 834,
+          "threatening_total": 831,
+          "threatening_kills": 830,
+          "kill_rate_threatening": 99.88,
+          "ci95_threatening": [
+            99.32,
+            99.98
+          ],
+          "kill_rate_engaged": 99.88,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.8,
+          "iqr_dv_mps": [
+            136.1,
+            155.9
+          ],
+          "misses_dv_exhausted": 1,
+          "misses": 1
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 832,
+          "kills": 832,
+          "threatening_total": 831,
+          "threatening_kills": 831,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 1,
+          "false_holds": 0,
+          "median_dv_mps": 130.0,
+          "iqr_dv_mps": [
+            120.4,
+            140.2
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 831,
+          "threatening_kills": 831,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.3,
+          "iqr_dv_mps": [
+            120.7,
+            139.9
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 831,
+          "protection_ref_pct": 99.88,
+          "protection_cmp_pct": 99.88,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 169,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 835,
+          "median_dv_diff_mps": -242.1,
+          "median_dv_diff_ci95": [
+            -245.1,
+            -240.0
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 831,
+          "protection_ref_pct": 99.88,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.12,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 1,
+          "mcnemar_p": 1.0,
+          "non_threatening": 169,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 1,
+          "false_engage_mcnemar_p": 0.25000000000000006,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": -15.2,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -15.0
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 831,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 169,
+          "false_engage_ref": 1,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.3,
+          "median_dv_diff_ci95": [
+            -0.2,
+            0.7
+          ]
+        }
+      }
+    },
+    {
+      "value": 8e-05,
+      "threatening": 831,
+      "configs": {
+        "C1_base_cart": {
+          "engaged": 835,
+          "kills": 835,
+          "threatening_total": 831,
+          "threatening_kills": 831,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 389.2,
+          "iqr_dv_mps": [
+            362.7,
+            414.8
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C5_kf6_vac_apn": {
+          "engaged": 835,
+          "kills": 835,
+          "threatening_total": 831,
+          "threatening_kills": 831,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 4,
+          "false_holds": 0,
+          "median_dv_mps": 145.4,
+          "iqr_dv_mps": [
+            135.7,
+            156.3
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        },
+        "C7_ekf7_drag_apn": {
+          "engaged": 833,
+          "kills": 832,
+          "threatening_total": 831,
+          "threatening_kills": 831,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 99.88,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.2,
+          "iqr_dv_mps": [
+            120.8,
+            140.3
+          ],
+          "misses_dv_exhausted": 1,
+          "misses": 1
+        },
+        "C9_adv_rae": {
+          "engaged": 833,
+          "kills": 833,
+          "threatening_total": 831,
+          "threatening_kills": 831,
+          "kill_rate_threatening": 100.0,
+          "ci95_threatening": [
+            99.54,
+            100.0
+          ],
+          "kill_rate_engaged": 100.0,
+          "false_engages": 2,
+          "false_holds": 0,
+          "median_dv_mps": 130.6,
+          "iqr_dv_mps": [
+            121.1,
+            140.5
+          ],
+          "misses_dv_exhausted": 0,
+          "misses": 0
+        }
+      },
+      "contrasts": {
+        "C1_base_cart->C5_kf6_vac_apn": {
+          "threatening": 831,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 169,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 4,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 835,
+          "median_dv_diff_mps": -242.1,
+          "median_dv_diff_ci95": [
+            -244.8,
+            -240.1
+          ]
+        },
+        "C5_kf6_vac_apn->C7_ekf7_drag_apn": {
+          "threatening": 831,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 169,
+          "false_engage_ref": 4,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 0.6249999999999994,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": -15.1,
+          "median_dv_diff_ci95": [
+            -15.4,
+            -14.9
+          ]
+        },
+        "C7_ekf7_drag_apn->C9_adv_rae": {
+          "threatening": 831,
+          "protection_ref_pct": 100.0,
+          "protection_cmp_pct": 100.0,
+          "protection_diff_pts": 0.0,
+          "discordant_only_ref": 0,
+          "discordant_only_cmp": 0,
+          "mcnemar_p": 1.0,
+          "non_threatening": 169,
+          "false_engage_ref": 2,
+          "false_engage_cmp": 2,
+          "false_engage_mcnemar_p": 1.0,
+          "paired_engaged": 832,
+          "median_dv_diff_mps": 0.2,
+          "median_dv_diff_ci95": [
+            -0.2,
+            0.5
+          ]
+        }
+      }
+    }
+  ]
+}

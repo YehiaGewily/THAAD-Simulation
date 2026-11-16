@@ -95,6 +95,7 @@ python scripts/drag_mismatch.py      # Vacuum vs. drag PIP overshoot study
 python scripts/gnc_trade_study.py    # KF6 vs. EKF7 & PN vs. APN vs. ZEM trade study
 python scripts/ablation_study.py     # 9-config x 1000-seed paired ablation, McNemar tests (--from-csv re-analyses)
 python scripts/sensitivity_study.py  # Divert-budget & threat-drag sweeps of 4 ablation configs (~1.7 h on 18 cores; --from-csv re-analyses)
+# Both take --atmosphere exponential: density falls off as exp(-z / 7 km), outputs get an _exp suffix
 python scripts/envelope_study.py     # Defended area & intercept altitude envelope
 python scripts/palette_check.py      # Color-blindness & contrast checks
 ```
