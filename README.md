@@ -1,6 +1,6 @@
 # THAAD-Style Terminal Intercept Simulation
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24208792.svg)](https://doi.org/10.5281/zenodo.24208792)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24208791.svg)](https://doi.org/10.5281/zenodo.24208791)
 
 A deterministic Python simulation of **terminal ballistic missile defense**—modeling radar sensing, Kalman state estimation, impact-point fire control, proportional/optimal guidance, and hit-to-kill two-stage vehicle dynamics.
 
