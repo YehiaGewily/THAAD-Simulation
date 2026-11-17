@@ -1,17 +1,20 @@
 """The Kalman filter: model structure, numerics and statistical consistency."""
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 from thaad_sim import load_config
 from thaad_sim.consistency import (
-    MEAS_DIM, STATE_DIM, average_bounds, average_statistics, chi2_quantile, fraction_inside,
-    monte_carlo, pip_bias, track_run, with_filter_q, without_drag,
+    MEAS_DIM, STATE_DIM, STATE_DIM_EKF7, average_bounds, average_nees7, average_statistics,
+    chi2_quantile, drag_snapshot, fraction_inside, monte_carlo, pip_bias, track_run,
+    with_drag_prior_std, with_filter_q, without_drag,
 )
 from thaad_sim.estimation import KalmanFilter, cwna_process_noise
 from thaad_sim.scenario import spawn_threat
 from thaad_sim.verification import ballistic_closed_form
 
-from conftest import CONFIGS
+from conftest import CONFIGS, ROOT
 
 DT, G = 0.02, 9.81
 
@@ -171,3 +174,58 @@ def test_track_run_finds_the_ground_crossing(cfg):
     run = track_run(without_drag(cfg), np.random.default_rng(3))
     assert np.isfinite(run.impact).all()
     assert run.t[-1] <= run.impact_time <= run.t[-1] + cfg.sim.dt
+
+
+# ---- 7-state EKF consistency ----
+
+MATCHED_DRAG_STD = 1.0e-5   # 1/m; keeps the drawn drag away from the filter's clip at zero
+
+
+def _ekf7_cfg(atmosphere):
+    adv = load_config(ROOT / "configs" / "advanced.yaml")
+    adv = replace(adv, sim=replace(adv.sim, atmosphere=atmosphere))
+    return with_drag_prior_std(adv, MATCHED_DRAG_STD)
+
+
+def _ekf7_matched_runs(cfg, truth_q):
+    return monte_carlo(cfg, range(N_RUNS), truth_q=truth_q, max_time=TRACK_TIME,
+                       drag_from_prior=True, with_pip=False)
+
+
+@pytest.mark.parametrize("atmosphere", ["constant", "exponential"])
+def test_ekf7_is_consistent_when_the_truth_follows_its_model(atmosphere):
+    cfg7 = _ekf7_cfg(atmosphere)
+    runs = _ekf7_matched_runs(cfg7, cfg7.kalman.q)
+    _, _, nis = average_statistics(runs)
+    assert _consistent(average_nees7(runs), STATE_DIM_EKF7)
+    assert _consistent(nis[1:], MEAS_DIM)
+    # The drawn drag differs from run to run and moves along its random walk
+    drags = [r.true_drag[0] for r in runs]
+    assert np.std(drags) == pytest.approx(MATCHED_DRAG_STD, rel=0.5)
+    assert runs[0].true_drag[-1] != runs[0].true_drag[0]
+
+
+def test_ekf7_nees_check_rejects_a_wrong_q():
+    cfg7 = _ekf7_cfg("constant")
+    runs = _ekf7_matched_runs(cfg7, 5.0 * cfg7.kalman.q)
+    assert not _consistent(average_nees7(runs), STATE_DIM_EKF7)
+
+
+def test_drag_snapshot_reports_the_normalized_drag_error():
+    cfg7 = _ekf7_cfg("constant")
+    runs = _ekf7_matched_runs(cfg7, cfg7.kalman.q)
+    snap = drag_snapshot(runs, 20.0)
+    assert snap["runs"] == N_RUNS
+    assert snap["sigma_median"] < MATCHED_DRAG_STD          # the filter has learned something
+    assert abs(snap["normalized_mean"]) < 0.6 and 0.5 < snap["normalized_std"] < 1.6
+    assert snap["coverage"] >= 0.8
+
+
+def test_track_run_drag_columns_are_empty_for_the_6_state_filter(cfg):
+    full = track_run(cfg, np.random.default_rng(5), max_time=5.0)
+    lean = track_run(cfg, np.random.default_rng(5), max_time=5.0, with_pip=False)
+    assert np.isnan(full.nees7).all() and np.isnan(full.est_drag).all()
+    assert np.all(full.true_drag == cfg.threat.drag)
+    # Skipping the impact prediction does not change the filter or the random stream
+    assert np.array_equal(full.nees, lean.nees)
+    assert np.isnan(lean.pip).all() and np.isfinite(full.pip[-1]).all()

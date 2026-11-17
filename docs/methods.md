@@ -226,6 +226,40 @@ With its own model the filter is consistent. Against the dragged threat, NEES is
 
 ![Average NEES](figures/nees.png)
 
+### Consistency of the 7-state EKF
+
+`scripts/ekf7_consistency.py` repeats the check for the EKF7 over $N$ = 200 seeded tracking runs, with each radar model and each atmosphere. The state now includes $k_T$, so the NEES has 7 degrees of freedom (95 % bounds on the average [6.49, 7.53]) and the NIS still has 6 ([5.53, 6.49]). Two settings:
+
+- **Matched model.** The true drag is drawn for each run from the filter's prior and then follows the filter's random walk (`kalman.q_drag`), and the truth is driven by the filter's own white-noise acceleration $Q$. The prior is narrowed to $(3.5 \pm 1.0) \times 10^{-5}\ \mathrm{m^{-1}}$ for this setting only, because the filter clips $\hat k_T$ at zero and the configured $\pm 2.5 \times 10^{-5}$ prior would put 8 % of the true values below it.
+- **As configured.** The nominal threat ($k_T = 4 \times 10^{-5}$, no process noise) and the filter exactly as the ablation runs it.
+
+Statistics are over the track up to the median intercept time (58.5 s with constant density, 50.7 s in the exponential atmosphere), which is the part the engagement uses. The values over the whole track to the ground differ by less than 0.1.
+
+| Setting, atmosphere (RAE radar) | Mean 7-state NEES | Steps inside | Mean NIS | Steps inside |
+| --- | --- | --- | --- | --- |
+| Matched, constant density | 7.08 | 94.0 % | 6.00 | 95.3 % |
+| Matched, exponential | 6.87 | 92.8 % | 5.99 | 95.2 % |
+| As configured, constant density | 4.55 | 0 % | 5.90 | 94.1 % |
+| As configured, exponential | 4.57 | 0 % | 5.90 | 94.2 % |
+
+The Cartesian radar gives the same picture (matched 7.03 and 6.85, as configured 4.43 and 4.44).
+
+| Drag estimate, as configured (RAE; units $10^{-5}\ \mathrm{m^{-1}}$, truth 4.0) | Median $\hat k_T$ | Filter's 1σ | Median absolute error | Normalized error, mean ± s.d. |
+| --- | --- | --- | --- | --- |
+| Constant density, launch decision (5 s) | 3.99 | 0.29 | 0.04 | −0.03 ± 0.23 |
+| Constant density, median intercept | 4.00 | 0.32 | 0.02 | +0.01 ± 0.10 |
+| Exponential, launch decision (5 s) | 3.50 | 2.51 | 0.50 | −0.20 ± 0.00 |
+| Exponential, median intercept | 3.51 | 2.58 | 0.49 | −0.18 ± 0.07 |
+
+**Reading.**
+
+- **The implementation is consistent with its own model.** In the matched setting the 7-state NEES and the NIS sit inside their bounds, and the normalized drag error has mean 0.04 and standard deviation 0.97 at intercept (constant density), with the truth inside the 95 % interval in 97 % of runs. The exponential case is slightly conservative (mean 6.87, drag s.d. 0.90).
+- **As tuned, the filter is conservative, not overconfident.** The average NEES is about 4.5 against an expected 7, and never inside the bounds. The filter assumes $q = 5\ \mathrm{m^2/s^3}$ of random acceleration and a drag random walk, and the nominal threat has neither, so the covariance is larger than the actual error. The NIS does not show this, because the innovations are dominated by $R$. The claimed drag 1σ is 3–10 times the actual scatter. The filter was not retuned, because the ablation results above were produced with these settings.
+- **With constant density the drag is learned before the launch decision.** After 5 s the median estimate is within 0.3 % of the truth, the median absolute error is 1.1 %, and the filter's 1σ is 7 % of it. The drag PIP and the feed-forward therefore work with an essentially correct coefficient throughout, which is why they perform as well as they do in that model.
+- **In the exponential atmosphere the drag is not learned before intercept.** The estimate is still the prior mean at the median intercept time (3.51 against a prior of 3.5), and the 1σ has not shrunk (2.58 against 2.5). The filter reports this correctly: its error is 0.2σ. The drag-aware components are then running on the prior, not on a measurement, which is the mechanism behind their small contribution in that atmosphere.
+
+![EKF7 consistency](figures/ekf7_consistency.png)
+
 ### Drag mismatch in the impact prediction
 
 The baseline 6-state filter and vacuum PIP ignore drag, while the threat has it. Over 100 seeded threats (`scripts/drag_mismatch.py`) the vacuum PIP lies downrange of the true impact point by a median 1.7 km at 80 s to go, 185 m at 40 s and 3 m at 10 s, and the predicted time to impact is too short. In a drag-free control the median along-track error is within ±10 m. At the first launch opportunity, 12 of 100 PIP-gated decisions would launch at a threat that lands outside the defended area, and 1 would hold fire on one that lands inside.
@@ -248,6 +282,8 @@ The upgrade changes four things at once, so the ablation below attributes the ga
 ### Component ablation (1000 paired seeds)
 
 `scripts/ablation_study.py` runs nine configurations on seeds 0–999 with the identical interceptor and threats, so each seed is a matched pair across configurations. A test (`tests/test_ablation.py`) checks that its fast engagement loop reproduces `thaad_sim.batch.run_metrics`.
+
+This subsection and the sensitivity sweeps after it use the presets' constant-density drag. The rerun in an exponential atmosphere ([below](#the-same-studies-in-an-exponential-atmosphere)) keeps the coast-gravity finding but removes every drag-related effect, so read the drag conclusions here as properties of the constant-density model.
 
 **Metrics.** A scenario is *threatening* when the unintercepted threat would land inside the 30 km defended radius (845 of 1000). The **protection rate** is the share of threatening scenarios that end in a kill; its denominator is the same for every configuration. The kill rate among engaged threats is not comparable across configurations, because each one makes its own PIP-gated launch decisions (the baseline engages 960 threats, the drag-PIP configurations about 850). A **false engagement** is a launch at a threat that would have landed outside the defended area (of 155). Differences in protection are tested with the exact two-sided McNemar test on the discordant pairs ($b$ = seeds only the reference kills, $c$ = seeds only the comparison kills). Differences in divert use are the median per-seed paired difference over seeds both configurations engaged, with a 4000-resample percentile bootstrap 95 % interval.
 
@@ -308,7 +344,7 @@ The smallest tested budget that protects at least 99 % of threatening threats is
 
 - **The baseline's misses need two things at once.** Against a drag-free threat the baseline protects all 827 threatening threats at a median 390 m/s, and protection falls to 47 % as drag grows. Without the coast gravity term it stays at 100 % over the whole range, even though KF6 and the vacuum PIP know nothing about drag. Unmodelled drag costs divert by itself (C5 rises from 144 to 326 m/s). The gravity term adds a paired median of 244 m/s at $k_T = 0$ and 183 m/s at the nominal drag (seeds where both kill), and that pushes the total over the budget.
 - **Feed-forward margin.** C7 spends a paired median of 92–135 m/s less than C5 for every $k_T \ge 2 \times 10^{-5}$, but only 18 m/s against a drag-free threat, where there is nothing to feed forward.
-- **Launch economy.** The vacuum PIP's false engagements grow with drag, from 4 % of non-threatening threats at $k_T = 0$ to 91 % at $8 \times 10^{-5}$, because a dragged threat falls short of the vacuum prediction. The drag PIP holds them to 3–8 % at every nonzero drag. Against a drag-free threat it does worse than the vacuum PIP (36 vs. 7 of 173, $p < 10^{-8}$). The launch decision comes after 5 s of tracking, while the drag estimate is still near its $3.5 \times 10^{-5}$ prior (the final estimates converge to within $10^{-6}$ of the truth), so the predictor expects some drag-free threats to fall short into the defended area when they actually fly over it. The RAE radar removes a few of these (28 vs. 36, $p$ = 0.008).
+- **Launch economy.** The vacuum PIP's false engagements grow with drag, from 4 % of non-threatening threats at $k_T = 0$ to 91 % at $8 \times 10^{-5}$, because a dragged threat falls short of the vacuum prediction. The drag PIP holds them to 3–8 % at every nonzero drag. Against a drag-free threat it does worse than the vacuum PIP (36 vs. 7 of 173, $p < 10^{-8}$). The launch decision comes after 5 s of tracking. By then the estimate has left its prior and its 1σ is about $0.3 \times 10^{-5}$, but the filter clips $\hat k_T$ at zero, so against a drag-free threat every estimation error is positive (median $0.1 \times 10^{-5}$, largest $1.6 \times 10^{-5}$ of 60 runs at 5 s). What turns this into launches is the one-sided spread, not the small median: over the 834 seeds both configurations launched on, the drag PIP's predicted range at launch is short of the true impact by a median 156 m with a standard deviation of 800 m, against +8 m and 151 m for the vacuum PIP. On its 36 false launches the drag PIP was short by a median 1.1 km (up to 2.8 km), on threats that land a median 760 m (up to 2.7 km) beyond the defended radius; the vacuum PIP's 7 were short by a median 230 m. This is consistent with the clip as the cause, but no run with the clip removed has tested it. The RAE radar removes a few of these launches (28 vs. 36, $p$ = 0.008).
 
 ![Sensitivity study](figures/sensitivity_study.png)
 
@@ -347,7 +383,7 @@ Four of the 9000 runs miss. Seeds 40 and 683 on C2 exhaust the divert budget and
 
 - **The drag effects were produced by the constant-density model.** Kills happen at a median 34.5 km altitude (range 25–43 km), where density is under 1 % of its sea-level value. Up to the intercept the threat is close to drag-free, so the vacuum PIP is nearly right, there is almost nothing to feed forward, and the baseline's 43-point protection deficit and its 115 false launches both disappear. Each exponential row is close to the constant-density drag-free row of the table above (390 / 144 / 127 m/s).
 - **The coast gravity term remains.** It is the only component with a large effect: 243 m/s of divert. The baseline needs the full 435 m/s budget for complete protection and is at 68 % with 350 m/s, while PN without the term protects every threatening threat with 150 m/s.
-- **Drag estimation contributes little before intercept.** The EKF7's drag estimate is still near its $3.5 \times 10^{-5}$ prior when the engagement ends, because drag is not observable in thin air (`tests/test_atmosphere.py` shows it converging only below about 30 km). Its 15 m/s saving has not been separated into drag feed-forward and the lower velocity error (median RMS 2.0 vs. 3.1 m/s). At a 100 m/s budget C7 protects 92.5 % (90.5–94.1) against 88.8 % (86.5–90.8) for C5.
+- **Drag estimation contributes little before intercept.** The EKF7's drag estimate is still near its $3.5 \times 10^{-5}$ prior when the engagement ends, because drag is not observable in thin air (`tests/test_atmosphere.py` shows it converging only below about 30 km). Its 15 m/s saving has not been separated into drag feed-forward and the lower velocity error (median RMS 2.0 vs. 3.1 m/s). The saving does decide kills at a tight budget. At 100 m/s C7 protects 92.5 % (90.5–94.1) against 88.8 % (86.5–90.8) for C5. The intervals overlap, but the paired test separates them: C5 → C7 rescues 34 seeds and loses 3 (McNemar $p = 1.2 \times 10^{-7}$). This is the only effect of the drag-aware stack on kills in this atmosphere.
 - **Which model to trust.** The exponential atmosphere is the more realistic of the two for an intercept above 25 km. The constant-density results above stand as a description of that model, and as a caution: an altitude-independent drag coefficient changes the conclusion of the trade study, not just its numbers.
 
 ![GNC ablation, exponential atmosphere](figures/ablation_study_exp.png)

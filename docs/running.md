@@ -91,6 +91,7 @@ This opens <http://127.0.0.1:8765>. See [Viewer Characteristics](visualizers.md)
 python -m pytest                     # Physics, GNC, verification, API, telemetry & template tests
 python scripts/convergence_study.py  # Euler vs. RK4 order & analytic checks -> results/convergence.json
 python scripts/filter_consistency.py # 50-run 6-DOF NEES & NIS study -> results/consistency.json
+python scripts/ekf7_consistency.py   # 200-run 7-state NEES, NIS & drag-estimate study, both atmospheres (~3 min)
 python scripts/drag_mismatch.py      # Vacuum vs. drag PIP overshoot study
 python scripts/gnc_trade_study.py    # KF6 vs. EKF7 & PN vs. APN vs. ZEM trade study
 python scripts/ablation_study.py     # 9-config x 1000-seed paired ablation, McNemar tests (--from-csv re-analyses)

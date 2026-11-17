@@ -36,32 +36,33 @@ See **[docs/methods.md](docs/methods.md)** for all governing equations, Jacobian
 
 ## Modes & Key Engineering Insight
 
-All scenarios run the exact same simulation code; only YAML settings change (`configs/`):
+All scenarios run the exact same simulation code; only YAML settings change (`configs/`). The presets use the default constant-density drag model, whose conclusions the next section qualifies:
 
-| Mode | Radar, Filter & Guidance | Interceptor Limits | Outcome Highlight |
+| Mode | Radar, Filter & Guidance | Interceptor Limits | Outcome (constant-density drag) |
 | --- | --- | --- | --- |
 | [`configs/engineering.yaml`](configs/engineering.yaml) | Cartesian radar, `kf6`, vacuum PIP, classical `pn` | 150 kN (5 s), 30 g, 435 m/s divert budget, 10 m $R_k$ | **56.8%** of threatening threats killed (480 / 845, 95% CI 53.4–60.1%); all 385 misses exhaust divert $\Delta v$ |
 | [`configs/advanced.yaml`](configs/advanced.yaml) | Polar `rae` radar, `ekf7`, drag PIP, `apn` | Identical 150 kN (5 s), 30 g, 435 m/s divert, 10 m $R_k$ | **100%** of threatening threats killed (845 / 845, 95% CI 99.5–100%) at a median 132 m/s divert $\Delta v$ |
 | [`configs/demo.yaml`](configs/demo.yaml) | Cartesian radar, `kf6`, vacuum PIP, classical `pn` | 220 kN (8 s), 50 g, unlimited divert, 30 m $R_k$ | **100%** (1000 / 1000, 95% CI 99.6–100%) |
 
-"Threatening" means the unintercepted threat would land inside the 30 km defended radius (845 of seeds 0–999). This denominator is the same for every configuration, unlike the kill rate among engaged threats, which depends on each configuration's own launch decisions.
+"Threatening" means the unintercepted threat would land inside the 30 km defended radius (845 of seeds 0–999 with constant-density drag, 830 in the exponential atmosphere). This denominator is the same for every configuration, unlike the kill rate among engaged threats, which depends on each configuration's own launch decisions.
 
-**What limits the baseline: a 1000-seed paired ablation** ([`scripts/ablation_study.py`](scripts/ablation_study.py)). Changing one GNC component at a time on the same seeds shows that one guidance term recovers every lost kill. Classical PN commands $+g$ throughout the kill vehicle's coast, although gravity cancels between two free-falling bodies, so the term pushes the vehicle off course and then spends divert $\Delta v$ correcting it. Removing that term alone (KF6 and vacuum PIP unchanged) raises protection from 56.8% to 100% (365 seeds rescued, none lost; exact McNemar $p < 10^{-100}$) and cuts median divert use from 435 to 271 m/s. Adding drag to the filter without changing the guidance barely helps (58%). The drag-aware software then does two different jobs:
+**Main finding: classical PN wastes divert during the coast** (1000-seed paired ablation, [`scripts/ablation_study.py`](scripts/ablation_study.py), and budget sweeps, [`scripts/sensitivity_study.py`](scripts/sensitivity_study.py)). Classical PN commands $+g$ throughout the kill vehicle's coast, although gravity cancels between two free-falling bodies, so the term pushes the vehicle off course and then spends divert $\Delta v$ correcting it. Changing one GNC component at a time on the same seeds, dropping that term after burnout is the only change with a large effect under both drag models:
 
-- **EKF7 drag feed-forward** halves divert use again (271 → 132 m/s median).
-- **The drag-integrated PIP** cuts launches at threats that would have landed outside the defended area from 115 to 5 (of 155).
+| Baseline → baseline without the coast $+g$ term | Constant-density drag (presets) | Exponential atmosphere ($H$ = 7 km) |
+| --- | --- | --- |
+| Protection at the 435 m/s budget | 56.8% → 100% (365 rescued, none lost) | 100% → 100% |
+| Median divert $\Delta v$ used | 435 (whole budget) → 271 m/s | 390 → 146 m/s |
+| Smallest tested budget for ≥ 99% protection | 550 → 435 m/s | 435 → 150 m/s |
 
-The RAE radar and ZEM vs. APN change neither outcome measurably, and sweeping radar noise from 5 m to 100 m moves the baseline by only 4.4 points.
+**What depends on the drag model.** With the presets' constant-density drag, the drag-aware software looks valuable on top of that. EKF7 drag feed-forward halves divert use again (271 → 132 m/s) and lowers the budget needed for 99% protection from 435 to 200 m/s, and the drag-integrated PIP cuts launches at threats that would land outside the defended area from 115 to 5 (of 155). A bundled comparison of the two presets (56.8% → 100%) would credit the EKF7, the drag PIP and the polar radar, although changing them one at a time adds at most 1.2 points of protection at the nominal budget.
 
-![GNC ablation](docs/figures/ablation_study.png)
+With density falling off as $e^{-z/7\,\mathrm{km}}$, intercepts happen at a median 34.5 km, where the air is under 1% of its sea-level density. Drag is then too weak to matter or to be estimated before intercept, and those benefits disappear: false engagements are 1–6 of 170 for every configuration, threat drag from 0 to 8 × 10⁻⁵ 1/m changes nothing, and the EKF7 saves 15 m/s. That saving still shows at a tight budget: at 100 m/s, adding the EKF7 and drag PIP to PN without the term rescues 34 seeds and loses 3 (McNemar $p \approx 10^{-7}$). An altitude-independent drag coefficient therefore changes the conclusion of the trade study, not just its numbers. Of the two, the exponential profile is the closer to the real atmosphere at these altitudes.
 
-**Sensitivity sweeps** ([`scripts/sensitivity_study.py`](scripts/sensitivity_study.py), 56,000 more paired runs). The baseline's misses need two things at once: the coast gravity term and threat drag that the filter does not model. Against a drag-free threat the baseline also protects 100%, and without the gravity term protection stays at 100% for every threat drag tested (0 to 8 × 10⁻⁵ 1/m). The feed-forward's margin turns into kills when the budget is tight. The smallest tested budget for ≥ 99% protection is 550 m/s for the baseline, 435 m/s without the gravity term, and 200 m/s with EKF7 drag feed-forward. One cost also showed up: against a drag-free threat the drag PIP launches at more threats that will land outside the defended area (36 vs. 7 of 173), because it decides after 5 s of tracking while its drag estimate is still near the prior. Details in [docs/methods.md](docs/methods.md#sensitivity-to-divert-budget-and-threat-drag-1000-paired-seeds-per-point).
-
-![Sensitivity study](docs/figures/sensitivity_study.png)
-
-**Caveat: these drag effects depend on the constant-density model.** All the numbers above use the default altitude-independent drag coefficient. Rerunning both studies with `--atmosphere exponential` (density $\propto e^{-z/7\,\mathrm{km}}$, known to the filter) puts the intercepts, at a median 34.5 km, in air under 1% of sea-level density, and the picture changes: the baseline protects 100% of threatening threats (830 / 830) at the 435 m/s budget, false engagements fall to 1–6 of 170 for every configuration, and threat drag from 0 to 8 × 10⁻⁵ 1/m changes nothing. The coast gravity term is the one large effect left. Removing it cuts median divert from 390 to 146 m/s, so the baseline needs the full 435 m/s for complete protection (68% at 350 m/s) while PN without the term needs 150 m/s. The EKF7 saves a further 15 m/s. Details in [docs/methods.md](docs/methods.md#the-same-studies-in-an-exponential-atmosphere).
+In both models the RAE radar and ZEM vs. APN change neither protection nor false engagements measurably, and sweeping radar noise from 5 m to 100 m moves the constant-density baseline by only 4.4 points. Full tables, sweeps and figures: [docs/methods.md](docs/methods.md#component-ablation-1000-paired-seeds) (constant density) and [its exponential-atmosphere rerun](docs/methods.md#the-same-studies-in-an-exponential-atmosphere).
 
 ![GNC ablation, exponential atmosphere](docs/figures/ablation_study_exp.png)
+
+![GNC ablation, constant-density drag](docs/figures/ablation_study.png)
 
 ![GNC trade study](docs/figures/gnc_trade_study.png)
 
@@ -72,7 +73,7 @@ The RAE radar and ZEM vs. APN change neither outcome measurably, and sweeping ra
 ## Verification Snapshot
 
 - **Integrator order** (`scripts/convergence_study.py`): Step-halving confirms order **1.00** (Euler) and **4.01** (RK4) on dragged threats, and **0.99** / **4.00** across interceptor booster burnout. With drag off, RK4 matches the closed-form solution to $6 \times 10^{-11}\text{ m}$.
-- **Kalman consistency** (`scripts/filter_consistency.py`): Over 50 seeded runs, 6-DOF NEES/NIS stay inside the 95% $\chi^2$ interval $[5.08, 7.00]$ when matched (mean NEES **6.11**, **94.3%** inside; NIS **5.99**, **95.1%** inside), while `kf6` on a dragged threat drops to **58.9%** NEES coverage—quantifying the drag mismatch solved by `ekf7`.
+- **Kalman consistency** (`scripts/filter_consistency.py`): Over 50 seeded runs, 6-DOF NEES/NIS stay inside the 95% $\chi^2$ interval $[5.08, 7.00]$ when matched (mean NEES **6.11**, **94.3%** inside; NIS **5.99**, **95.1%** inside), while `kf6` on a dragged threat drops to **58.9%** NEES coverage—quantifying the drag mismatch solved by `ekf7`. The 7-state EKF (`scripts/ekf7_consistency.py`, 200 runs) is consistent with its own model (mean 7-state NEES **7.08**, **94.0%** inside) and conservative as tuned (mean NEES 4.55). With constant density it learns the drag to about 1% (median error) by the 5 s launch decision; in the exponential atmosphere its estimate is still the prior at intercept.
 
 ---
 

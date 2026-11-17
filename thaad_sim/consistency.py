@@ -13,6 +13,7 @@ from .estimation import KalmanFilter, cwna_process_noise, make_filter, measure_r
 from .scenario import spawn_threat
 
 STATE_DIM = 6   # [p, v]
+STATE_DIM_EKF7 = 7   # [p, v, k_T]
 MEAS_DIM = 6    # H = I: position and velocity are both measured
 
 # Standard-normal quantiles for two-sided 95 % bounds
@@ -50,6 +51,11 @@ def with_filter_q(cfg, q):
     return replace(cfg, kalman=replace(cfg.kalman, q=q))
 
 
+def with_drag_prior_std(cfg, drag_std):
+    """The same config with a different 1-sigma width of the EKF7's drag prior."""
+    return replace(cfg, kalman=replace(cfg.kalman, drag_std=drag_std))
+
+
 @dataclass
 class TrackRun:
     t: np.ndarray            # (n,) s
@@ -60,21 +66,36 @@ class TrackRun:
     vel: np.ndarray          # (n, 3) true velocity
     impact: np.ndarray       # (2,) true impact point on z = 0
     impact_time: float       # s
+    # Drag state of the 7-state EKF; all NaN for the 6-state filter
+    nees7: np.ndarray = None       # (n,) NEES on [p, v, k_T]
+    est_drag: np.ndarray = None    # (n,) estimated k_T, 1/m
+    drag_sigma: np.ndarray = None  # (n,) the filter's 1-sigma for k_T, 1/m
+    true_drag: np.ndarray = None   # (n,) true k_T, 1/m
 
 
-def track_run(cfg, rng, truth_q=None, max_time=None):
+def track_run(cfg, rng, truth_q=None, max_time=None, drag_from_prior=False, with_pip=True):
     """Track one seeded threat to the ground.
 
     With ``truth_q`` (m^2/s^3) the truth also receives discretized white-noise
     acceleration, w_k ~ N(0, Q(truth_q)), after every step. With drag off and
     ``truth_q`` equal to the filter's q, the truth follows exactly the
     filter's model, the setting in which NEES and NIS must be chi-square.
+
+    For the 7-state EKF the matched setting is ``drag_from_prior`` with
+    ``truth_q``: the true drag is drawn from the filter's prior
+    N(drag_init, drag_std^2) and then follows the filter's random walk
+    (kalman.q_drag). ``with_pip=False`` skips the impact prediction, which
+    the NEES and NIS do not need.
     """
     dt, g = cfg.sim.dt, cfg.sim.g
     threat = spawn_threat(cfg, rng).threat
     kf = make_filter(cfg)
+    is_ekf7 = hasattr(kf, "P7")
+    if drag_from_prior:
+        threat.drag = float(rng.normal(cfg.kalman.drag_init, cfg.kalman.drag_std))
     if truth_q:
         L = np.linalg.cholesky(cwna_process_noise(truth_q, dt))
+        drag_walk = np.sqrt(cfg.kalman.q_drag * dt) if is_ekf7 else 0.0
 
     t = 0.0
     rows = []
@@ -82,11 +103,16 @@ def track_run(cfg, rng, truth_q=None, max_time=None):
     while threat.active and (max_time is None or t < max_time):
         mp, mv, R_meas = measure_radar(threat.pos, threat.vel, cfg.sensor, rng)
         kf.update(mp, mv, R_meas=R_meas)
-        pip = kf.predict_impact(g)
-        tgo = kf.time_to_impact(g)
+        pip = kf.predict_impact(g) if with_pip else None
+        tgo = kf.time_to_impact(g) if with_pip else None
+        if is_ekf7:
+            drag_cols = (kf.nees7(np.hstack((threat.state, threat.drag))), float(kf.x7[6]),
+                         float(np.sqrt(kf.P7[6, 6])), threat.drag)
+        else:
+            drag_cols = (np.nan, np.nan, np.nan, threat.drag)
         rows.append((t, kf.nees(threat.state), np.nan if kf.nis is None else kf.nis,
                      pip[:2] if pip is not None else (np.nan, np.nan),
-                     np.nan if tgo is None else tgo, threat.vel.copy()))
+                     np.nan if tgo is None else tgo, threat.vel.copy()) + drag_cols)
         t_ground = threat.update(dt)
         if t_ground is not None:
             # The threat stops at the ground crossing, interpolated inside the step
@@ -94,15 +120,45 @@ def track_run(cfg, rng, truth_q=None, max_time=None):
             break
         if truth_q:
             threat.state = threat.state + L @ rng.standard_normal(STATE_DIM)
+            if drag_walk:
+                threat.drag += drag_walk * rng.standard_normal()
         t += dt
 
-    t, nees, nis, pip, tgo, vel = (np.array(c, dtype=float) for c in zip(*rows))
-    return TrackRun(t, nees, nis, pip, tgo, vel, impact, impact_time)
+    t, nees, nis, pip, tgo, vel, nees7, est_drag, drag_sigma, true_drag = (
+        np.array(c, dtype=float) for c in zip(*rows))
+    return TrackRun(t, nees, nis, pip, tgo, vel, impact, impact_time,
+                    nees7, est_drag, drag_sigma, true_drag)
 
 
-def monte_carlo(cfg, seeds, truth_q=None, max_time=None):
+def monte_carlo(cfg, seeds, truth_q=None, max_time=None, **kwargs):
     """One TrackRun per seed, each from its own ``np.random.default_rng(seed)``."""
-    return [track_run(cfg, np.random.default_rng(s), truth_q, max_time) for s in seeds]
+    return [track_run(cfg, np.random.default_rng(s), truth_q, max_time, **kwargs) for s in seeds]
+
+
+def average_nees7(runs):
+    """Per-step average of the 7-state NEES over the runs, up to the shortest run."""
+    n = min(len(r.t) for r in runs)
+    return np.mean([r.nees7[:n] for r in runs], axis=0)
+
+
+def drag_snapshot(runs, t):
+    """The EKF7's drag estimate across runs at time ``t`` (s since first detection).
+
+    ``normalized`` is (estimate - truth) / sigma per run: mean 0 and standard
+    deviation 1 for a consistent filter. ``coverage`` is the share of runs
+    whose truth lies within 1.96 sigma of the estimate.
+    """
+    i = int(round(t / (runs[0].t[1] - runs[0].t[0])))
+    sel = [r for r in runs if len(r.t) > i]
+    est = np.array([r.est_drag[i] for r in sel])
+    sig = np.array([r.drag_sigma[i] for r in sel])
+    true = np.array([r.true_drag[i] for r in sel])
+    z = (est - true) / sig
+    return {"t": float(t), "runs": len(sel), "estimate_median": float(np.median(est)),
+            "sigma_median": float(np.median(sig)), "truth_median": float(np.median(true)),
+            "abs_error_median": float(np.median(np.abs(est - true))),
+            "normalized_mean": float(np.mean(z)), "normalized_std": float(np.std(z, ddof=1)),
+            "coverage": float(np.mean(np.abs(z) <= 1.959963984540054))}
 
 
 def average_statistics(runs):
