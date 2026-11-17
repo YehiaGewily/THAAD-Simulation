@@ -3,8 +3,8 @@ message: "If you use this software, please cite it as below."
 title: "THAAD-Style Terminal Intercept Simulation"
 abstract: "A deterministic Python simulation of terminal ballistic missile defense: radar sensing, Kalman/EKF estimation, impact-point fire control, PN/APN/ZEM guidance, and hit-to-kill two-stage vehicle dynamics, with a live web workstation. Educational; uses only illustrative, unclassified parameters."
 type: software
-version: 1.0.0
-date-released: 2026-11-14
+version: 1.1.0
+date-released: 2026-11-17
 license: MIT
 doi: 10.5281/zenodo.24208792
 repository-code: "https://github.com/YehiaGewily/THAAD-Simulation"
