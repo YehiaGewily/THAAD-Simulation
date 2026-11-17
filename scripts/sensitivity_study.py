@@ -8,6 +8,11 @@ move the operating point to find where each GNC component starts to matter:
   * divert: ``interceptor.kv_divert_dv`` from 100 to 550 m/s at the nominal drag
   * drag:   true threat drag ``threat.drag`` from 0 to 8e-5 1/m at the nominal budget
             (the EKF7 prior stays at 3.5e-5 +/- 2.5e-5 1/m, so this is a model-mismatch sweep)
+  * noise:  every radar noise value (Cartesian position and velocity; RAE range,
+            angle, Doppler and cross-range velocity) times a factor from 0.25 to 4,
+            at divert budgets of 435, 150 and 100 m/s. The filter's measurement
+            noise scales with it; its process noise and drag prior do not.
+            Run with ``--sweeps noise``; it has its own summary and figure.
 
 Four ablation configurations are swept over the same N paired seeds:
 C1 (baseline), C5 (free-fall PN, KF6), C7 (EKF7 + drag PIP + APN, Cartesian)
@@ -19,6 +24,8 @@ Writes:
   - results/sensitivity_divert.csv, results/sensitivity_drag.csv
   - results/sensitivity_summary.json
   - docs/figures/sensitivity_study.png
+  - noise group: results/sensitivity_noise_<budget>.csv,
+    results/sensitivity_noise_summary.json, docs/figures/sensitivity_noise.png
 
 With ``--atmosphere exponential`` every run uses the exponential atmosphere and
 the outputs get an ``_exp`` suffix; the swept drag is then the sea-level value.
@@ -26,6 +33,7 @@ the outputs get an ``_exp`` suffix; the swept drag is then the sea-level value.
 Usage:
     py scripts/sensitivity_study.py --runs 1000
     py scripts/sensitivity_study.py --from-csv      # re-analyse the CSVs without re-running
+    py scripts/sensitivity_study.py --sweeps noise --atmosphere exponential
 """
 from __future__ import annotations
 
@@ -37,6 +45,7 @@ import os
 import sys
 import time
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -60,8 +69,12 @@ _spec.loader.exec_module(ablation)
 
 OUT_JSON = ROOT / "results" / "sensitivity_summary.json"
 OUT_FIG = ROOT / "docs" / "figures" / "sensitivity_study.png"
+OUT_NOISE_JSON = ROOT / "results" / "sensitivity_noise_summary.json"
+OUT_NOISE_FIG = ROOT / "docs" / "figures" / "sensitivity_noise.png"
+NOISE_BUDGETS = [435.0, 150.0, 100.0]
 CSV = {"divert": ROOT / "results" / "sensitivity_divert.csv",
-       "drag": ROOT / "results" / "sensitivity_drag.csv"}
+       "drag": ROOT / "results" / "sensitivity_drag.csv",
+       **{f"noise_{b:g}": ROOT / "results" / f"sensitivity_noise_{b:g}.csv" for b in NOISE_BUDGETS}}
 
 SWEPT = ["C1_base_cart", "C5_kf6_vac_apn", "C7_ekf7_drag_apn", "C9_adv_rae"]
 LABELS = {
@@ -76,6 +89,7 @@ MARKERS = {"C1_base_cart": "o", "C5_kf6_vac_apn": "s", "C7_ekf7_drag_apn": "D", 
 
 DIVERT_VALUES = [100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 435.0, 550.0]
 DRAG_VALUES = [0.0, 1.0e-5, 2.0e-5, 4.0e-5, 6.0e-5, 8.0e-5]
+NOISE_FACTORS = [0.25, 0.5, 1.0, 2.0, 4.0]
 SWEEP_COLUMNS = ("sweep", "sweep_value") + ablation.ABLATION_COLUMNS
 PLOT_NOTE = ""   # extra title line, set for the exponential atmosphere
 INK, INK_2 = ablation.INK, ablation.INK_2
@@ -89,7 +103,21 @@ def _with_drag(cfg, v):
     return replace(cfg, threat=replace(cfg.threat, drag=v))
 
 
-SWEEPS = {"divert": (DIVERT_VALUES, _with_divert), "drag": (DRAG_VALUES, _with_drag)}
+def with_noise_factor(cfg, k):
+    """Every radar noise value times ``k``; the filter's measurement noise follows the sensor."""
+    sn = cfg.sensor
+    return replace(cfg, sensor=replace(sn, pos_noise=k * sn.pos_noise, vel_noise=k * sn.vel_noise,
+                                       range_noise=k * sn.range_noise, angle_noise=k * sn.angle_noise,
+                                       range_rate_noise=k * sn.range_rate_noise))
+
+
+def _with_noise_at_budget(budget, cfg, k):
+    return with_noise_factor(_with_divert(cfg, budget), k)
+
+
+SWEEPS = {"divert": (DIVERT_VALUES, _with_divert), "drag": (DRAG_VALUES, _with_drag),
+          **{f"noise_{b:g}": (NOISE_FACTORS, partial(_with_noise_at_budget, b)) for b in NOISE_BUDGETS}}
+GROUPS = {"noise": [f"noise_{b:g}" for b in NOISE_BUDGETS]}
 
 
 def _job(job):
@@ -226,11 +254,66 @@ def plot(summary, n_runs, out_path):
     print(f"Wrote {out_path}")
 
 
+def plot_noise(summary, n_runs, out_path):
+    """Protection vs. noise factor at each budget, and median divert at the nominal budget."""
+    fig, axes = plt.subplots(2, 2, figsize=(13.0, 9.0), facecolor=ablation.SURFACE)
+    panels = [(axes[0, 0], "a", 435.0), (axes[0, 1], "b", 150.0), (axes[1, 0], "c", 100.0)]
+    ticks = [f"{k:g}×\n{25.0 * k:g} m" for k in NOISE_FACTORS]
+
+    def series(entries, cid, key):
+        return np.array([e["configs"][cid][key] for e in entries], dtype=float)
+
+    def log_axis(ax, x):
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(x)
+        ax.set_xticklabels(ticks, fontsize=8)
+        ax.minorticks_off()
+        ax.axvline(1.0, color=INK_2, ls="--", lw=1.0)
+
+    for ax, letter, budget in panels:
+        entries = summary[f"noise_{budget:g}"]
+        x = [e["value"] for e in entries]
+        _style(ax, f"{letter}) Protection rate vs. radar noise ({budget:g} m/s divert budget)",
+               "radar noise factor  (Cartesian position 1σ)", "threatening threats killed  [%]")
+        for cid in SWEPT:
+            lo = np.array([e["configs"][cid]["ci95_threatening"][0] for e in entries])
+            hi = np.array([e["configs"][cid]["ci95_threatening"][1] for e in entries])
+            ax.plot(x, series(entries, cid, "kill_rate_threatening"), color=COLORS[cid], marker=MARKERS[cid],
+                    ms=5, lw=1.8, label=LABELS[cid])
+            ax.fill_between(x, lo, hi, color=COLORS[cid], alpha=0.12, lw=0)
+        log_axis(ax, x)
+        ax.set_ylim(0, 104)
+
+    ax = axes[1, 1]
+    entries = summary["noise_435"]
+    x = [e["value"] for e in entries]
+    _style(ax, "d) Median KV divert Δv vs. radar noise (435 m/s budget)",
+           "radar noise factor  (Cartesian position 1σ)", "median divert Δv, engaged  [m/s]")
+    for cid in SWEPT:
+        ax.plot(x, series(entries, cid, "median_dv_mps"), color=COLORS[cid], marker=MARKERS[cid],
+                ms=5, lw=1.8, label=LABELS[cid])
+    ax.axhline(435.0, color="#b2182b", ls="--", lw=1.1)
+    log_axis(ax, x)
+    ax.set_ylim(0, 470)
+    ax.legend(frameon=True, facecolor=ablation.SURFACE, edgecolor="none", fontsize=8.3,
+              labelcolor=INK, loc="center left")
+
+    fig.suptitle(f"Sensitivity of the GNC ablation to radar noise ({n_runs} paired seeds per point; "
+                 f"1× = nominal, filter process noise not retuned){PLOT_NOTE}",
+                 x=0.01, ha="left", fontsize=11.5, color=INK, fontweight="bold")
+    fig.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=150, facecolor=ablation.SURFACE)
+    plt.close(fig)
+    print(f"Wrote {out_path}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--runs", type=int, default=1000, help="paired seeds 0..N-1 (default: 1000)")
     parser.add_argument("--workers", type=int, default=None, help="worker processes (default: CPU count)")
-    parser.add_argument("--sweeps", default="divert,drag", help="comma list of sweeps (default: divert,drag)")
+    parser.add_argument("--sweeps", default="divert,drag",
+                        help="comma list of sweeps or groups (default: divert,drag; also: noise)")
     parser.add_argument("--from-csv", action="store_true", help="re-analyse the sweep CSVs instead of re-running")
     parser.add_argument("--smoke", type=Path, default=None, metavar="DIR",
                         help="quick check: two values per sweep, all outputs written to DIR")
@@ -238,41 +321,56 @@ def main(argv=None):
                         help="density model for every configuration; exponential writes *_exp outputs")
     args = parser.parse_args(argv)
 
-    global OUT_JSON, OUT_FIG, PLOT_NOTE
+    global OUT_JSON, OUT_FIG, OUT_NOISE_JSON, OUT_NOISE_FIG, PLOT_NOTE
     if args.atmosphere == "exponential":
         OUT_JSON = OUT_JSON.with_name("sensitivity_summary_exp.json")
         OUT_FIG = OUT_FIG.with_name("sensitivity_study_exp.png")
+        OUT_NOISE_JSON = OUT_NOISE_JSON.with_name("sensitivity_noise_summary_exp.json")
+        OUT_NOISE_FIG = OUT_NOISE_FIG.with_name("sensitivity_noise_exp.png")
         for k in CSV:
             CSV[k] = CSV[k].with_name(CSV[k].stem + "_exp.csv")
         PLOT_NOTE = "\nExponential atmosphere; drag values are sea-level coefficients"
     if args.smoke:
         args.smoke.mkdir(parents=True, exist_ok=True)
-        OUT_JSON, OUT_FIG = args.smoke / "sensitivity_summary.json", args.smoke / "sensitivity_study.png"
+        OUT_JSON, OUT_FIG = args.smoke / OUT_JSON.name, args.smoke / OUT_FIG.name
+        OUT_NOISE_JSON, OUT_NOISE_FIG = args.smoke / OUT_NOISE_JSON.name, args.smoke / OUT_NOISE_FIG.name
         for k in CSV:
             CSV[k] = args.smoke / CSV[k].name
         DIVERT_VALUES[:] = [150.0, 435.0]
         DRAG_VALUES[:] = [0.0, 4.0e-5]
+        NOISE_FACTORS[:] = [0.5, 2.0]
 
-    names = [n.strip() for n in args.sweeps.split(",") if n.strip()]
+    names = []
+    for n in (n.strip() for n in args.sweeps.split(",") if n.strip()):
+        names.extend(GROUPS.get(n, [n]))
     for n in names:
         if n not in SWEEPS:
-            parser.error(f"unknown sweep {n!r}; choose from {', '.join(SWEEPS)}")
+            parser.error(f"unknown sweep {n!r}; choose from {', '.join(list(SWEEPS) + list(GROUPS))}")
 
     base_cfgs = {cid: cfg for cid, _, _, cfg in ablation.build_configs(args.atmosphere) if cid in SWEPT}
     seeds = list(range(args.runs))
     workers = args.workers or os.cpu_count() or 1
 
-    summary = json.loads(OUT_JSON.read_text(encoding="utf-8")) if OUT_JSON.exists() else {}
+    # The noise group keeps its own summary, so the divert/drag summary is never rewritten by it
+    paths = {"main": OUT_JSON, "noise": OUT_NOISE_JSON}
+    summaries = {g: json.loads(p.read_text(encoding="utf-8")) if p.exists() else {} for g, p in paths.items()}
+    touched = set()
     with multiprocessing.Pool(workers) as pool:
         for name in names:
+            group = "noise" if name in GROUPS["noise"] else "main"
             rows = load_sweep(name) if args.from_csv else run_sweep(name, base_cfgs, seeds, pool)
-            summary[name] = analyse(name, rows, base_cfgs, pool)
-            summary["runs_per_point"] = len({r["seed"] for r in rows})
+            summaries[group][name] = analyse(name, rows, base_cfgs, pool)
+            summaries[group]["runs_per_point"] = len({r["seed"] for r in rows})
+            touched.add(group)
 
-    OUT_JSON.write_bytes((json.dumps(summary, indent=2) + "\n").encode("utf-8"))
-    print(f"Wrote {OUT_JSON}")
-    if "divert" in summary and "drag" in summary:
-        plot(summary, summary["runs_per_point"], OUT_FIG)
+    for group in sorted(touched):
+        paths[group].write_bytes((json.dumps(summaries[group], indent=2) + "\n").encode("utf-8"))
+        print(f"Wrote {paths[group]}")
+    main_s, noise_s = summaries["main"], summaries["noise"]
+    if "main" in touched and "divert" in main_s and "drag" in main_s:
+        plot(main_s, main_s["runs_per_point"], OUT_FIG)
+    if "noise" in touched and all(n in noise_s for n in GROUPS["noise"]):
+        plot_noise(noise_s, noise_s["runs_per_point"], OUT_NOISE_FIG)
 
 
 if __name__ == "__main__":

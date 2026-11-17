@@ -390,6 +390,46 @@ Four of the 9000 runs miss. Seeds 40 and 683 on C2 exhaust the divert budget and
 
 ![Sensitivity study, exponential atmosphere](figures/sensitivity_study_exp.png)
 
+### Sensitivity to radar noise (exponential atmosphere, 1000 paired seeds per point)
+
+`scripts/sensitivity_study.py --sweeps noise --atmosphere exponential` multiplies every radar noise value by a factor of 0.25, 0.5, 1, 2 or 4: position and velocity noise for the Cartesian radar (25 m and 8 m/s at 1×), and range, angle, Doppler and cross-range velocity noise for the RAE radar. The filter's measurement noise follows the sensor; its process noise $q$ and drag prior are not retuned. The sweep runs C1, C5, C7 and C9 at divert budgets of 435, 150 and 100 m/s on seeds 0–999 (830 threatening). At 1× every one of the 12,000 runs matches the exponential ablation and divert sweep exactly.
+
+**Protection rate** (threatening threats killed):
+
+| Budget | Factor (Cartesian position 1σ) | C1 baseline | C5 PN without coast $+g$ | C7 EKF7 + drag PIP + APN | C9 `advanced.yaml` (RAE) |
+| --- | --- | --- | --- | --- | --- |
+| 435 m/s | 0.25–1× (6–25 m) | 99.9–100 % | 99.9–100 % | 100 % | 100 % |
+| | 2× (50 m) | 96.0 % | 93.7 % | 94.9 % | 88.4 % |
+| | 4× (100 m) | 52.2 % | 54.8 % | 59.2 % | 46.1 % |
+| 150 m/s | 0.25–1× | 0 % | 99.9–100 % | 100 % | 100 % |
+| | 2× | 0 % | 93.1 % | 94.7 % | 88.2 % |
+| | 4× | 0 % | 48.1 % | 58.8 % | 43.7 % |
+| 100 m/s | 0.25× | 0 % | 94.0 % | 94.7 % | 94.7 % |
+| | 1× | 0 % | 88.8 % | 92.5 % | 92.2 % |
+| | 2× | 0 % | 61.7 % | 76.6 % | 71.9 % |
+| | 4× | 0 % | 20.5 % | 36.3 % | 27.8 % |
+
+**Median divert used at 435 m/s:** C1 368 → 390 → 411 → 435 m/s, C5 113 → 146 → 173 → 234 m/s and C7 104 → 130 → 152 → 197 m/s at 0.25×, 1×, 2× and 4×. C9 matches C7 up to 2× (154 m/s) and uses the whole budget at 4×. False engagements (of 170) rise from 1 at 0.25× to 19 at 4× with the vacuum PIP (C1, C5), against 1 to 5 for C7 and 1 to 10 for C9.
+
+| Paired contrast (McNemar $b$ / $c$) | 1× | 2× | 4× |
+| --- | --- | --- | --- |
+| C1 → C5 at 435 m/s | 0 / 0; divert −243 m/s | 46 / 27 ($p$ = 0.034); −232 m/s | 186 / 208 ($p$ = 0.29); −192 m/s |
+| C5 → C7 at 435 m/s | 0 / 0; divert −15 m/s | 1 / 11 ($p$ = 0.006); −21 m/s | 7 / 43 ($p = 2 \times 10^{-7}$); −25 m/s |
+| C5 → C7 at 100 m/s | 3 / 34 ($p = 10^{-7}$) | 45 / 169 ($p = 4 \times 10^{-18}$) | 76 / 207 ($p = 4 \times 10^{-15}$) |
+| C7 → C9 at 435 m/s | 0 / 0 | 73 / 19 ($p = 10^{-8}$) | 205 / 97 ($p = 5 \times 10^{-10}$) |
+| C7 → C9 at 100 m/s | 14 / 11 ($p$ = 0.69) | 100 / 61 ($p$ = 0.003) | 161 / 91 ($p = 10^{-5}$) |
+
+$b$ = seeds only the first configuration kills, $c$ = seeds only the second kills.
+
+**Reading.**
+
+- **Radar noise is the second budget driver.** Divert use grows with noise in every configuration, and above the nominal noise even the 435 m/s budget no longer protects every threat: at 2× (50 m) 4–12 % of threatening threats get through, at 4× (100 m) 41–54 %. Every one of those misses has exhausted its divert. Below 1× nothing changes at 435 or 150 m/s, and at 100 m/s protection rises only from 92.5 % to 94.7 % (C7), so the nominal noise sits just below the point where it starts to cost kills.
+- **The gravity term stays the largest divert cost, but noise can swamp it.** Dropping it saves 253 m/s at 0.25× and 192 m/s at 4×. At 4× noise and 435 m/s, C1 and C5 protect alike (52 % and 55 %, $p$ = 0.29), because both are now limited by noise. At 2× C1 kills slightly more than C5 (46 against 27 seeds, $p$ = 0.034); the reason is not established.
+- **The EKF7 stack's edge grows with noise.** C5 → C7 is worth 15 m/s at 1× and 25 m/s at 4× at the nominal budget, and from 4 points at 1× to 16 points at 4× (100 m/s budget). The drag PIP also keeps false engagements at 4–5 where the vacuum PIP rises to 13–19 ($p$ = 0.004 at 2×, $10^{-4}$ at 4×). This contrast changes more than drag modelling: the EKF7 runs with $q = 5\ \mathrm{m^2/s^3}$ against the KF6's 30, so it smooths noisy measurements harder. Since the drag estimate barely leaves its prior in this atmosphere (see the EKF7 consistency study), the lower $q$ is the more likely source of the gain; that has not been tested separately.
+- **The RAE radar is worse at high noise.** It ties the Cartesian radar at 1× and below, and loses at 2× and 4× (6.5 and 13 points at 435 m/s). Scaling every noise value by the same factor does not degrade the two radars equally. At the 72–86 km slant range where tracking starts, 1.2 mrad of angle noise is already 85–105 m of cross-range noise against the Cartesian radar's 25 m per axis, and the factor multiplies both. This is a statement about these noise settings, not about range–angle radars in general.
+
+![Radar-noise sensitivity, exponential atmosphere](figures/sensitivity_noise_exp.png)
+
 ### Batch statistics
 
 `python -m thaad_sim.batch` runs N seeded engagements; rates are reported with 95 % Wilson score intervals. Over seeds 0–999, engineering mode engages 960 threats and kills 575 of them: 59.9 % (95 % CI 56.8–63.0 %). All 385 misses had spent the full divert budget. The demo kills 1000 of 1000 (95 % CI 99.6–100 %). `python -m thaad_sim.dashboard results/engineering.csv` collects these results with the studies above in one page. The workstation's live Monte Carlo (§9) calls the same per-run metrics through the same process pool, so a live batch over seeds 0 to N−1 matches the first N rows of the CSV for the same settings.
