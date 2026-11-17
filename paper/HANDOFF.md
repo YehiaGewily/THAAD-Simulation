@@ -10,7 +10,7 @@ This brief is for whoever writes the arXiv paper from this repository. The exper
 - **Naming:** keep "THAAD" out of the title and abstract. Describe the model as a terminal hit-to-kill interceptor, and mention THAAD only as the repository's name (THAAD-Simulation) in the code-availability statement.
 - **References:** 15–25. Each one must be checked to exist, with the authors, title, venue, year and DOI confirmed against the publisher or a library index. Invented or unverified citations are not acceptable.
 - **Figures:** all in one consistent style. The repository figures share a palette and fonts (`scripts/ablation_study.py`, `INK`/`SURFACE` and the per-configuration colours), so regenerate from the scripts rather than restyling by hand. A block diagram of the GNC loop still has to be made.
-- **Code and data citation:** the Zenodo concept DOI is 10.5281/zenodo.24208792 (`CITATION.cff`, version 1.0.0). A v1.1.0 GitHub release is planned so that Zenodo archives the exact code and data used; cite that version's DOI once it exists.
+- **Code and data citation:** cite the v1.1.0 archive, which holds the exact code and data behind every number here: **10.5281/zenodo.24311162** (GitHub release v1.1.0, commit 0caac9f). The concept DOI, which always resolves to the latest version, is 10.5281/zenodo.24208791. Note that the README badge and `CITATION.cff` currently carry 10.5281/zenodo.24208792, which is the v1.0.0 version DOI, not the concept DOI.
 
 ## Model in one paragraph
 
