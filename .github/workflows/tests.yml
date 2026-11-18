@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: python -m pip install -e ".[dev,workstation]"
+        run: python -m pip install -e ".[dev,plot,workstation]"
 
       - name: Run tests
         run: python -m pytest -v
