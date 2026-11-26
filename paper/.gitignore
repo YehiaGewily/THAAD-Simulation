@@ -1,0 +1,11 @@
+# LaTeX build intermediates and planning/submission scratch files (main.pdf and main.bbl are kept)
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+*.out
+*.blg
+*.synctex.gz
+arxiv_upload.zip
+OUTLINE.md
+HANDOFF.md

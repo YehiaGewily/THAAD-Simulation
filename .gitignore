@@ -1,7 +1,9 @@
 replays/
 __pycache__/
 *.egg-info/
+.pytest_cache/
 /site/
+/tmp/
 viewer/node_modules/
 viewer/dist/
 private plans/
